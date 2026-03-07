@@ -1,0 +1,208 @@
+╔════════════════════════════════════════════════════════════════╗
+║     ACADEMIAPRO - QUICK REFERENCE GUIDE                         ║
+╚════════════════════════════════════════════════════════════════╝
+
+📦 NEW FILES CREATED:
+├─ .env                      → Local environment variables (DO NOT COMMIT)
+├─ .env.example              → Template for .env
+├─ .gitignore               → Prevents sensitive files from git
+├─ config.py                → Centralized configuration
+├─ requirements.txt         → Python dependencies
+├─ wsgi.py                  → Production WSGI entry point
+├─ run.bat                  → Windows startup script
+├─ run.sh                   → Linux/Mac startup script
+├─ DEPLOYMENT_GUIDE.md      → Step-by-step deployment
+├─ README_SECURITY.md       → This security documentation
+└─ QUICK_REFERENCE.txt      → This file!
+
+✏️ MODIFIED FILES:
+├─ app.py                   → Now uses environment variables + security headers
+└─ check.py                 → Now uses environment variables
+
+═══════════════════════════════════════════════════════════════════
+
+🚀 QUICK START:
+
+WINDOWS:
+  1. Double-click: run.bat
+  2. Visit: http://localhost:5000
+
+LINUX/MAC:
+  1. Run: chmod +x run.sh && ./run.sh
+  2. Visit: http://localhost:5000
+
+MANUAL:
+  1. python -m venv venv
+  2. source venv/bin/activate  # (Windows: venv\Scripts\activate)
+  3. pip install -r requirements.txt
+  4. python app.py
+
+═══════════════════════════════════════════════════════════════════
+
+🔒 SECURITY IMPROVEMENTS:
+
+✅ API Keys:
+   - Moved from hardcoded to environment variables
+   - Protected by .env file (in .gitignore)
+
+✅ CORS:
+   - Restricted to specific origins (not all-open)
+
+✅ Headers:
+   - Added X-Content-Type-Options
+   - Added X-Frame-Options
+   - Added X-XSS-Protection
+   - Added Strict-Transport-Security
+
+✅ Session:
+   - HTTPOnly cookies
+   - Secure flag
+   - SameSite protection
+
+✅ File Uploads:
+   - Size limits enforced
+   - Filename sanitization
+   - Path traversal prevention
+
+═══════════════════════════════════════════════════════════════════
+
+🚀 BEFORE DEPLOYMENT:
+
+1. UPDATE .env FILE:
+   - Change FLASK_ENV to 'production'
+   - Generate new SECRET_KEY:
+     python -c "import secrets; print(secrets.token_hex(32))"
+   - Update CORS_ORIGINS to your domain
+   - Add real GOOGLE_API_KEY
+
+2. CHECK .env:
+   FLASK_ENV=production
+   FLASK_DEBUG=False
+   SECRET_KEY=<new_strong_key>
+   GOOGLE_API_KEY=<your_real_api_key>
+   CORS_ORIGINS=https://yourdomain.com
+
+3. TEST LOCALLY:
+   python app.py
+   # Visit http://localhost:5000
+
+4. DEPLOY WITH GUNICORN:
+   pip install gunicorn
+   gunicorn -w 4 -b 0.0.0.0:5000 wsgi:app
+
+═══════════════════════════════════════════════════════════════════
+
+📋 ENVIRONMENT VARIABLES:
+
+Development (.env):
+  FLASK_ENV=development
+  FLASK_DEBUG=False
+  SECRET_KEY=dev-key-change
+
+Production (.env on server):
+  FLASK_ENV=production
+  FLASK_DEBUG=False
+  SECRET_KEY=<strong_random_32_chars>
+  GOOGLE_API_KEY=<production_key>
+  CORS_ORIGINS=https://yourdomain.com
+
+═══════════════════════════════════════════════════════════════════
+
+⚠️ DO NOT:
+
+❌ Commit .env to git
+❌ Use debug=True in production
+❌ Expose API keys in code
+❌ Use weak SECRET_KEY
+❌ Allow all CORS origins
+❌ Serve via HTTP (use HTTPS)
+❌ Run as root user on Linux
+❌ Ignore security warnings
+
+═══════════════════════════════════════════════════════════════════
+
+✅ DO:
+
+✅ Use environment variables for secrets
+✅ Enable HTTPS/SSL in production
+✅ Keep SECRET_KEY secret
+✅ Monitor API usage
+✅ Backup upload folders regularly
+✅ Update dependencies periodically
+✅ Use strong passwords everywhere
+✅ Follow deployment guide carefully
+
+═══════════════════════════════════════════════════════════════════
+
+🔑 GENERATING STRONG KEYS:
+
+Python:
+  python -c "import secrets; print(secrets.token_hex(32))"
+
+PowerShell:
+  [System.Convert]::ToBase64String((1..32 | ForEach-Object { [byte](Get-Random -Minimum 0 -Maximum 256) }))
+
+Online Tool:
+  https://www.random.org/passwords/
+
+═══════════════════════════════════════════════════════════════════
+
+📊 DIRECTORY STRUCTURE:
+
+AcademiaPro app/
+├── app.py                ← Main Flask app
+├── config.py             ← Configuration (NEW)
+├── check.py              ← Utility script
+├── wsgi.py               ← WSGI entry point (NEW)
+├── .env                  ← Local env vars (NEW, NOT in git)
+├── .env.example          ← Env template (NEW)
+├── .gitignore            ← Git settings (NEW)
+├── requirements.txt      ← Dependencies (NEW)
+├── run.bat               ← Windows starter (NEW)
+├── run.sh                ← Linux starter (NEW)
+├── DEPLOYMENT_GUIDE.md   ← Detailed guide (NEW)
+├── README_SECURITY.md    ← Security info (NEW)
+├── templates/
+│   └── index.html
+├── uploads/              ← Temporary files (auto-cleaned)
+└── vault_storage/        ← Persistent storage
+
+═══════════════════════════════════════════════════════════════════
+
+🐛 TROUBLESHOOTING:
+
+Issue: "GOOGLE_API_KEY not found"
+  → Check .env exists with GOOGLE_API_KEY=...
+
+Issue: "Module not found (flask, etc)"
+  → pip install -r requirements.txt
+
+Issue: "Port 5000 already in use"
+  → Kill existing process or use different port
+
+Issue: "Poppler not found"
+  → Check POPPLER_PATH in .env
+
+═══════════════════════════════════════════════════════════════════
+
+📞 NEXT STEPS:
+
+1. ✅ Run: run.bat (or run.sh)
+2. ✅ Test: Visit http://localhost:5000
+3. ✅ Update: Edit .env with production values
+4. ✅ Deploy: Follow DEPLOYMENT_GUIDE.md
+5. ✅ Monitor: Setup logging/monitoring
+
+═══════════════════════════════════════════════════════════════════
+
+🎉 YOU'RE GOOD TO GO!
+
+Your application is now:
+  ✓ Secure
+  ✓ Production-ready
+  ✓ Best-practices compliant
+  ✓ Ready to scale
+
+Happy deploying! 🚀
+
+═══════════════════════════════════════════════════════════════════
