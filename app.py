@@ -5,7 +5,6 @@ import qrcode
 import math
 import json
 import logging
-import google.generativeai as genai
 from io import BytesIO 
 from flask import Flask, render_template, request, send_file, jsonify
 from werkzeug.utils import secure_filename
@@ -20,6 +19,13 @@ from pptx.util import Inches
 from flask_cors import CORS
 from config import config
 from dotenv import load_dotenv
+
+try:
+    import google.generativeai as genai
+    GENAI_IMPORT_ERROR = None
+except Exception as _genai_err:
+    genai = None
+    GENAI_IMPORT_ERROR = str(_genai_err)
 
 try:
     import pythoncom
@@ -38,11 +44,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- SECURE AI CONFIGURATION ---
-if not config.GOOGLE_API_KEY:
-    logger.error("GOOGLE_API_KEY not found in environment variables")
-    raise ValueError("GOOGLE_API_KEY environment variable is required")
+GENAI_AVAILABLE = True
+if GENAI_IMPORT_ERROR:
+    GENAI_AVAILABLE = False
+    logger.warning("google.generativeai import unavailable: %s", GENAI_IMPORT_ERROR)
 
-genai.configure(api_key=config.GOOGLE_API_KEY)
+if not config.GOOGLE_API_KEY:
+    GENAI_AVAILABLE = False
+    logger.warning("GOOGLE_API_KEY not found; AI features will be disabled")
+
+if GENAI_AVAILABLE:
+    try:
+        genai.configure(api_key=config.GOOGLE_API_KEY)
+    except Exception as _cfg_err:
+        GENAI_AVAILABLE = False
+        logger.warning("Failed to configure Gemini client: %s", _cfg_err)
+
 AI_MODEL_ID = config.AI_MODEL_ID
 
 # Initialize Flask app
@@ -467,6 +484,9 @@ def vault_download(index):
 @app.route('/ai-academic-help', methods=['POST'])
 def ai_academic_help():
     try:
+        if not GENAI_AVAILABLE:
+            return jsonify({"answer": "AI service is temporarily unavailable on this deployment runtime. Please set Python 3.11.9 in Render and redeploy."}), 503
+
         data = request.get_json()
         user_query = data.get('query')
         
@@ -568,6 +588,12 @@ def ai_lab_chat():
     Reads the stored file and answers questions about it
     """
     try:
+        if not GENAI_AVAILABLE:
+            return jsonify({
+                "error": "AI service unavailable",
+                "answer": "AI model is unavailable on current runtime. Set Python 3.11.9 in Render and redeploy."
+            }), 503
+
         data = request.json
         filename = data.get('filename')
         query = data.get('query', '')
