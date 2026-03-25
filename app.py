@@ -1,6 +1,8 @@
 import os
 import time
 import zipfile
+import shutil
+import subprocess
 import qrcode 
 import math
 import json
@@ -184,19 +186,43 @@ def pdf_to_img_logic(input_path, page_str):
     return saved_files
 
 def convert_to_pdf(in_path, out_path):
-    if not HAS_WIN32COM:
-        raise RuntimeError("Word to PDF conversion requires Windows with pywin32 installed")
+    if HAS_WIN32COM:
+        pythoncom.CoInitialize()
+        try:
+            word = win32com.client.Dispatch("Word.Application")
+            word.Visible = False
+            doc = word.Documents.Open(in_path)
+            doc.SaveAs(out_path, FileFormat=17)
+            doc.Close()
+            word.Quit()
+            return
+        finally:
+            pythoncom.CoUninitialize()
 
-    pythoncom.CoInitialize()
-    try:
-        word = win32com.client.Dispatch("Word.Application")
-        word.Visible = False
-        doc = word.Documents.Open(in_path)
-        doc.SaveAs(out_path, FileFormat=17)
-        doc.Close()
-        word.Quit()
-    finally:
-        pythoncom.CoUninitialize()
+    # Linux/macOS fallback: use LibreOffice headless conversion.
+    office_bin = shutil.which("soffice") or shutil.which("libreoffice")
+    if not office_bin:
+        raise RuntimeError("LibreOffice is not installed on this host")
+
+    out_dir = os.path.dirname(out_path) or "."
+    cmd = [
+        office_bin,
+        "--headless",
+        "--convert-to",
+        "pdf:writer_pdf_Export",
+        "--outdir",
+        out_dir,
+        in_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "LibreOffice conversion failed")
+
+    generated = os.path.join(out_dir, os.path.splitext(os.path.basename(in_path))[0] + ".pdf")
+    if not os.path.exists(generated):
+        raise RuntimeError("Converted PDF file was not generated")
+    if os.path.abspath(generated) != os.path.abspath(out_path):
+        os.replace(generated, out_path)
 
 # --- ROUTES ---
 
@@ -209,13 +235,6 @@ def handle_conversion():
     files = request.files.getlist('file')
     if not files or files[0].filename == '':
         return "No files", 400
-
-    if not HAS_WIN32COM:
-        return (
-            "Word to PDF conversion is not available on this hosting environment. "
-            "Use local Windows deployment for this feature.",
-            501,
-        )
 
     results = []
     failed_files = []
@@ -235,8 +254,8 @@ def handle_conversion():
     if not results:
         return (
             "Could not convert the uploaded Word file(s) on this server. "
-            "This feature requires Microsoft Word automation on Windows.",
-            501,
+            "Please try again later or contact support.",
+            500,
         )
 
     if len(results) > 1:
