@@ -2648,8 +2648,8 @@ body.dark-theme .settings-modal {
         <div id="command-results" class="command-results"></div>
     </div>
 </div>
-<div id="screen-ai-lab" class="tool-screen" 
-     style="display:none; flex-direction: column; align-items: center; width: 100%; height: 100vh; overflow-y: auto; padding: 40px; box-sizing: border-box;">
+<div id="screen-ai-lab" class="tool-screen" data-display="flex"
+    style="display:none; flex-direction: column; align-items: center; width: 100%; padding: 20px 0; box-sizing: border-box;">
     
     <div class="tool-card" style="width: 100%; max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; background: white; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.05);">
         <h2 style="color: #8b5cf6;"><i class="fa-solid fa-microscope"></i> AI Research Lab</h2>
@@ -2858,6 +2858,16 @@ async function startFreshConversion() {
             });
         }
 
+        function normalizeToolScreenMounts() {
+            const aiLab = document.getElementById('screen-ai-lab');
+            const mainContent = document.querySelector('.main-content');
+
+            // Keep AI Lab in the same container as other screens so it cannot break shell layout.
+            if (aiLab && mainContent && aiLab.parentElement !== mainContent) {
+                mainContent.appendChild(aiLab);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const safeInit = (label, fn) => {
                 try {
@@ -2878,6 +2888,7 @@ async function startFreshConversion() {
             }
 
             // Run non-critical initializers after binding critical interaction handlers.
+            safeInit('normalizeToolScreenMounts', () => normalizeToolScreenMounts());
             safeInit('fetchHubData', () => fetchHubData());
             safeInit('initializeAppShell', () => initializeAppShell());
             safeInit('buildCommandPaletteIndex', () => buildCommandPaletteIndex());
@@ -3140,7 +3151,7 @@ async function startFreshConversion() {
 
             const target = document.getElementById(screenId);
             if (target) {
-                target.style.display = 'block';
+                target.style.display = target.dataset.display || 'block';
                 target.classList.add('active');
             }
 

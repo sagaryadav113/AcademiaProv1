@@ -11,7 +11,7 @@ class Config:
     DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     
     # API Keys
-    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY')
     AI_MODEL_ID = os.getenv('AI_MODEL_ID', 'models/gemini-flash-latest')
     
     # File Upload
