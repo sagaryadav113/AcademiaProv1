@@ -1,8 +1,6 @@
 import os
 import time
 import zipfile
-import pythoncom
-import win32com.client
 import qrcode 
 import math
 import json
@@ -22,6 +20,15 @@ from pptx.util import Inches
 from flask_cors import CORS
 from config import config
 from dotenv import load_dotenv
+
+try:
+    import pythoncom
+    import win32com.client
+    HAS_WIN32COM = True
+except ImportError:
+    pythoncom = None
+    win32com = None
+    HAS_WIN32COM = False
 
 # Load environment variables
 load_dotenv()
@@ -160,6 +167,9 @@ def pdf_to_img_logic(input_path, page_str):
     return saved_files
 
 def convert_to_pdf(in_path, out_path):
+    if not HAS_WIN32COM:
+        raise RuntimeError("Word to PDF conversion requires Windows with pywin32 installed")
+
     pythoncom.CoInitialize()
     try:
         word = win32com.client.Dispatch("Word.Application")

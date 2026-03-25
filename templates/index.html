@@ -683,7 +683,7 @@ window.handleLabUpload = async () => {
     formData.append('file', file);
     
     try {
-        const res = await fetch('http://127.0.0.1:5000/ai_lab_upload', {
+        const res = await fetch('/ai_lab_upload', {
             method: 'POST',
             body: formData
         });
@@ -751,7 +751,7 @@ window.deleteLabFile = (index) => {
     
     // Delete from server in background (if it was uploaded)
     if(labFilesWithStatus[file.id] === 'uploaded') {
-        fetch('http://127.0.0.1:5000/delete-ai-lab-file', {
+        fetch('/delete-ai-lab-file', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ filename: file.name })
@@ -815,7 +815,7 @@ window.askLabAI = async () => {
         
         const fetchStartTime = Date.now();
         
-        const res = await fetch('http://127.0.0.1:5000/ai_lab_chat', {
+        const res = await fetch('/ai_lab_chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -900,7 +900,7 @@ window.askLabAI = async () => {
         
         if (error.message.includes("Failed to fetch")) {
             errorMsg = "Cannot connect to server";
-            tipMsg = "Make sure Flask is running on http://localhost:5000. Click the 'Test' button to verify connection.";
+            tipMsg = "Make sure the backend is running. Click the 'Test' button to verify connection.";
         } else if (error.message.includes("Network")) {
             errorMsg = "Network connection error";
             tipMsg = "Check your internet connection and make sure the server is responding. Try the 'Test' button.";
@@ -939,14 +939,14 @@ function escapeHtml(text) {
 window.testBackendConnection = async () => {
     try {
         console.log("Testing backend connection...");
-        const res = await fetch('http://127.0.0.1:5000/test-connection');
+        const res = await fetch('/test-connection');
         const data = await res.json();
         console.log("✅ Backend is responding:", data);
-        alert("✅ Backend Connection Successful!\n\nServer is responding correctly at localhost:5000");
+        alert("✅ Backend Connection Successful!\n\nServer is responding correctly.");
         return true;
     } catch (error) {
         console.error("❌ Backend Connection Failed:", error);
-        alert("❌ Backend Connection Failed!\n\nMake sure Flask is running on http://localhost:5000\n\nError: " + error.message);
+        alert("❌ Backend Connection Failed!\n\nMake sure the backend is running.\n\nError: " + error.message);
         return false;
     }
 };
@@ -2575,7 +2575,7 @@ async function startFreshConversion() {
     formData.append('file', file);
 
     try {
-        const response = await fetch('http://127.0.0.1:5000/convert-pdf-to-ppt', {
+        const response = await fetch('/convert-pdf-to-ppt', {
             method: 'POST',
             body: formData
         });
