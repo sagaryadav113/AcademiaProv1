@@ -207,8 +207,18 @@ def index():
 @app.route('/convert', methods=['POST'])
 def handle_conversion():
     files = request.files.getlist('file')
-    if not files or files[0].filename == '': return "No files", 400
+    if not files or files[0].filename == '':
+        return "No files", 400
+
+    if not HAS_WIN32COM:
+        return (
+            "Word to PDF conversion is not available on this hosting environment. "
+            "Use local Windows deployment for this feature.",
+            501,
+        )
+
     results = []
+    failed_files = []
     for file in files:
         fname = secure_filename(file.filename)
         in_p = os.path.join(UPLOAD_FOLDER, fname)
@@ -218,7 +228,16 @@ def handle_conversion():
         try:
             convert_to_pdf(in_p, out_p)
             results.append(out_p)
-        except: pass
+        except Exception as e:
+            logger.warning("Word conversion failed for %s: %s", fname, e)
+            failed_files.append(fname)
+
+    if not results:
+        return (
+            "Could not convert the uploaded Word file(s) on this server. "
+            "This feature requires Microsoft Word automation on Windows.",
+            501,
+        )
 
     if len(results) > 1:
         zip_p = os.path.join(UPLOAD_FOLDER, f"converted_{int(time.time())}.zip")
