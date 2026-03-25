@@ -4,7 +4,7 @@
     <script type="module">
   // 1. ALL IMPORTS AT THE TOP
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
   // 2. ONE CONFIGURATION ONLY
   const firebaseConfig = {
     apiKey: "AIzaSyB9Icr1kh0__4VDHnIFV0G3T0L6LRSGi8s",
@@ -18,444 +18,110 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
 
   // 3. INITIALIZE ONCE
   const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // 4. AUTH & PROFILE LOGIC
-  // 1. Logic to handle UI changes when user logs in/out
-  onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-            const data = userDoc.data();
-            
-            // --- PROFILE SYNC LOGIC ---
-            document.getElementById('dash-edit-status').value = data.status || "Student";
-            document.getElementById('dash-edit-name').value = data.fullName || "";
-            document.getElementById('dash-edit-pic-url').value = data.photoURL || "";
-            document.getElementById('dash-profile-email').innerText = user.email;
-            document.getElementById('dash-profile-pic').src = data.photoURL || `https://ui-avatars.com/api/?name=${data.fullName}`;
-            document.getElementById('edit-username').value = data.fullName || "";
-            document.getElementById('edit-avatar-url').value = data.photoURL || "";
-            document.getElementById('user-display-email').innerText = data.fullName;
-            
-            const avatarImg = document.getElementById('user-nav-pic');
-            if (avatarImg) {
-                avatarImg.src = data.photoURL || `https://ui-avatars.com/api/?name=${data.fullName}&background=random`;
-            }
+    const GUEST_UID_KEY = 'academiapro_guest_uid';
+    function getGuestUid() {
+        let uid = localStorage.getItem(GUEST_UID_KEY);
+        if (!uid) {
+            uid = `guest_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+            localStorage.setItem(GUEST_UID_KEY, uid);
+        }
+        return uid;
+    }
+    function getCurrentUser() {
+        return { uid: getGuestUid() };
+    }
 
-            // Sync to Feature Screen
-            if (document.getElementById('feature-profile-name')) document.getElementById('feature-profile-name').innerText = data.fullName;
-            if (document.getElementById('feature-profile-status')) document.getElementById('feature-profile-status').innerText = data.status || "STUDENT";
-            if (document.getElementById('feature-profile-email')) document.getElementById('feature-profile-email').innerText = user.email;
-            if (document.getElementById('feature-profile-pic')) {
-                document.getElementById('feature-profile-pic').src = data.photoURL || `https://ui-avatars.com/api/?name=${data.fullName}&background=random`;
-            }
+    // Auth was removed; keep attendance stable in local cache mode.
+    const ATTENDANCE_CLOUD_SYNC = false;
 
-            // --- THE MISSING PIECE: LOAD YOUR DATA ---
-            // This ensures your attendance stays saved and loads immediately
-            if (typeof window.loadAttendance === 'function') window.loadAttendance();
-            if (typeof window.renderPendingCards === 'function') window.renderPendingCards();
-            if (typeof window.renderTodoCards === 'function') window.renderTodoCards();
-            if (typeof window.renderVaultCards === 'function') window.renderVaultCards();
-            if (typeof window.generateAIBriefing === 'function') window.generateAIBriefing();
+    // Pre-initialize fallback so inline/button handlers are always defined.
+    window.addAttendanceItem = async () => {
+        if (typeof window.showToast === 'function') {
+            window.showToast('Please wait while workspace initializes.', 'warning');
+        }
+    };
 
-            // Default screen
-            window.showScreen('screen-ai-hub'); 
-            updateDynamicCalendarIcon();
+    // Guest mode: auth UI is disabled; app opens directly into workspace.
+    window.__authDisabled = true;
+    window.__useStandaloneAuth = false;
+    window.__introDismissed = false;
+    window.__postIntroTarget = 'screen-cards';
 
+    window.closeIntro = () => {
+        const intro = document.getElementById('intro-page');
+        window.__introDismissed = true;
+        if (intro) {
+            intro.style.opacity = '0';
+            setTimeout(() => {
+                intro.style.display = 'none';
+            }, 800);
+        }
+
+        const targetScreen = window.__postIntroTarget || 'screen-cards';
+        window.__postIntroTarget = targetScreen;
+        if (typeof window.showScreen === 'function') {
+            window.showScreen(targetScreen);
         } else {
-            window.showScreen('screen-profile-setup');
-        }
-    } else {
-        window.showScreen('screen-auth');
-    }
-});
-
-  // --- CLEANED GLOBAL FUNCTIONS ---
-
-  // --- CONSOLIDATED GLOBAL FUNCTIONS (REPLACE EVERYTHING FROM LINE 133-214) ---
-
-  // 1. Unified Toggle for the Settings Menu
-  window.toggleProfileMenu = () => {
-    const menu = document.getElementById('profile-dropdown');
-    if (menu) {
-      const isHidden = menu.style.display === 'none' || menu.style.display === '';
-      menu.style.display = isHidden ? 'block' : 'none';
-      menu.classList.toggle('active');
-    }
-  };
-
-  // 2. Initial Profile Setup logic
-  window.saveProfessionalProfile = async () => {
-    const nameInput = document.getElementById('setup-name');
-    const name = nameInput ? nameInput.value.trim() : "";
-
-    if (!name) return alert("Please enter your full name to continue.");
-
-    const user = auth.currentUser;
-    if (user) {
-      try {
-        await setDoc(doc(db, "users", user.uid), {
-          fullName: name,
-          setupComplete: true,
-          email: user.email,
-          updatedAt: new Date()
-        }, { merge: true });
-
-        alert("Profile saved! Welcome, " + name);
-        location.reload(); 
-      } catch (error) {
-        alert("Save error: " + error.message);
-      }
-    }
-  };
-
-  // 3. Update Name from within the Settings Dropdown
-// 1. Function to save changes from the Dashboard
-// Add this helper function
-window.toggleUrlInput = () => {
-    const container = document.getElementById('url-input-container');
-    container.style.display = container.style.display === 'none' ? 'block' : 'none';
-};
-
-// Update the main save function
-window.updateProfile = async () => {
-    const newName = document.getElementById('dash-edit-name').value;
-    const newStatus = document.getElementById('dash-edit-status').value;
-    const newPic = document.getElementById('dash-edit-pic-url').value;
-    const user = auth.currentUser;
-
-    if (!user) return;
-
-    try {
-        await setDoc(doc(db, "users", user.uid), {
-            fullName: newName,
-            status: newStatus,
-            photoURL: newPic
-        }, { merge: true });
-
-        // Update UI elements
-        document.getElementById('user-display-email').innerText = newName;
-        document.getElementById('dash-profile-pic').src = newPic || `https://ui-avatars.com/api/?name=${newName}`;
-        if(newPic) document.getElementById('user-nav-pic').src = newPic;
-
-        // Hide the URL box again
-        document.getElementById('url-input-container').style.display = 'none';
-        
-        alert("Profile & Status updated!");
-    } catch (e) {
-        console.error(e);
-        alert("Error updating profile");
-    }
-};
-
-// 2. Update your existing onAuthStateChanged logic to fill the dash
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-            const data = userDoc.data();
-            
-            // Sync to Top Nav
-            document.getElementById('user-display-email').innerText = data.fullName;
-            if(data.photoURL) document.getElementById('user-nav-pic').src = data.photoURL;
-
-            // Sync to the NEW Dashboard Section
-            document.getElementById('dash-profile-name').innerText = data.fullName;
-            document.getElementById('dash-profile-email').innerText = user.email;
-            if(data.photoURL) {
-                document.getElementById('dash-profile-pic').src = data.photoURL;
-                document.getElementById('dash-edit-pic-url').value = data.photoURL;
+            document.querySelectorAll('.tool-screen').forEach((screen) => {
+                screen.style.display = 'none';
+                screen.classList.remove('active');
+            });
+            const target = document.getElementById(targetScreen);
+            if (target) {
+                target.style.display = 'block';
+                target.classList.add('active');
             }
         }
-    }
-});
-  // 4. Standard Auth Handlers
-  window.handleLogin = async () => {
-    const email = document.getElementById('auth-email').value;
-    const pass = document.getElementById('auth-pass').value;
-    try {
-        await signInWithEmailAndPassword(auth, email, pass);
-    } catch (error) {
-        alert("Login Error: " + error.message);
-    }
-  };
+    };
 
-  window.handleSignUp = async () => {
-    const email = document.getElementById('auth-email').value;
-    const pass = document.getElementById('auth-pass').value;
-    try {
-        await createUserWithEmailAndPassword(auth, email, pass);
-    } catch (error) {
-        alert("Signup Error: " + error.message);
-    }
-  };
-
-  window.handleLogout = () => {
-      signOut(auth).then(() => {
-          location.reload();
-      });
-  };
-
-  // 5. Dark/Light Mode Logic
-  window.setTheme = (theme) => {
-    document.body.classList.remove('light-theme', 'dark-theme');
-    if (theme === 'dark') document.body.classList.add('dark-theme');
-    localStorage.setItem('user-theme', theme);
-    
-    // Update theme button styles
-    updateThemeButtons();
-  };
-
-  // Function to update theme button styles
-  window.updateThemeButtons = () => {
-    const lightBtn = document.querySelector('[onclick="setTheme(\'light\')"]');
-    const darkBtn = document.querySelector('[onclick="setTheme(\'dark\')"]');
-    
-    if (!lightBtn || !darkBtn) return;
-    
-    const isDark = document.body.classList.contains('dark-theme');
-    const baseStyle = 'flex:1; padding:10px; border-radius:8px; font-size:0.85rem; border:2px solid transparent; cursor:pointer; font-weight:600; transition: all 250ms ease;';
-    
-    if (isDark) {
-      darkBtn.style.cssText = baseStyle + ' background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);';
-      lightBtn.style.cssText = baseStyle + ' background: transparent; color: var(--text-primary);';
-    } else {
-      lightBtn.style.cssText = baseStyle + ' background: linear-gradient(135deg, #fbbf24, #f59e0b); color: white; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);';
-      darkBtn.style.cssText = baseStyle + ' background: transparent; color: var(--text-primary);';
-    }
-  };
-
-  // Automatically check for saved theme preference
-  const savedTheme = localStorage.getItem('user-theme');
-  if (savedTheme) window.setTheme(savedTheme);
-  
-  // Update buttons when page loads
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(window.updateThemeButtons, 100);
-  });
- window.detectAIContent = async () => {
-    const text = document.getElementById('ai-input-text').value;
-    const percentageText = document.getElementById('ai-percentage');
-    const verdict = document.getElementById('ai-verdict');
-    const circle = document.getElementById('ai-result-circle');
-
-    if (text.length < 100) return alert("Please enter more text for analysis.");
-
-    document.getElementById('ai-status').innerText = "Analyzing text patterns...";
-    
-    // Simulating a scan
-    setTimeout(() => {
-        const score = Math.floor(Math.random() * 100);
-        percentageText.innerText = score + "%";
-        
-        if (score > 70) {
-            verdict.innerText = "AI Generated";
-            circle.style.borderColor = "#e11d48";
-        } else if (score > 30) {
-            verdict.innerText = "Mixed Content";
-            circle.style.borderColor = "#f59e0b";
-        } else {
-            verdict.innerText = "Human Written";
-            circle.style.borderColor = "#059669";
-        }
-        document.getElementById('ai-status').innerText = "Scan complete.";
-    }, 2000);
-};
-// Toggle the corner windows
-window.toggleUtility = (id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.style.display = el.style.display === 'none' ? 'block' : 'none';
-    
-    // If opening the calendar, load the notes
-    if (id === 'mini-calendar' && el.style.display === 'block') {
-        fetchAllNotes();
-    }
-};
-
-// 1. Save Calendar Note to Firestore
-window.saveCalendarNote = async () => {
-    const date = document.getElementById('cal-date').value;
-    const note = document.getElementById('cal-note').value;
-    const user = auth.currentUser;
-
-    if (!date || !note) return alert("Please select date and write a note.");
-
-    try {
-        await setDoc(doc(db, "users", user.uid, "calendar", date), {
-            note: note,
-            timestamp: new Date()
-        });
-        alert("Note saved for " + date);
-        document.getElementById('cal-note').value = "";
-    } catch (e) { alert("Error: " + e.message); }
-};
-// 1. Function to fetch all notes and display as checklist
-window.fetchAllNotes = async () => {
-    const user = auth.currentUser;
-    const checklist = document.getElementById('notes-checklist');
-    if (!user || !checklist) return;
-
-    try {
-        const querySnapshot = await getDocs(collection(db, "users", user.uid, "calendar"));
-        checklist.innerHTML = ""; // Clear the loading text
-
-        if (querySnapshot.empty) {
-            checklist.innerHTML = "<p style='font-size:0.8rem; color:#94a3b8; text-align:center;'>No notes found.</p>";
+    function routeToScreen(screenId) {
+        if (typeof window.showScreen === 'function') {
+            window.showScreen(screenId);
             return;
         }
 
-        querySnapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            const dateId = docSnap.id; 
-
-            const item = document.createElement('div');
-            item.style = "display: flex; align-items: flex-start; gap: 10px; background: #f8fafc; padding: 10px; border-radius: 8px; border-left: 4px solid var(--primary); margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);";
-            item.innerHTML = `
-                <div style="flex-grow: 1;">
-                    <div style="font-size: 0.7rem; font-weight: bold; color: var(--primary);">${dateId}</div>
-                    <div style="font-size: 0.85rem; color: #1e293b;">${data.note}</div>
-                </div>
-                <i class="fa-solid fa-trash" onclick="deleteCalendarNote('${dateId}')" style="color: #cbd5e1; cursor: pointer; font-size: 0.8rem; margin-top: 5px;"></i>
-            `;
-            checklist.appendChild(item);
+        document.querySelectorAll('.tool-screen').forEach((screen) => {
+            screen.style.display = 'none';
+            screen.classList.remove('active');
         });
-    } catch (e) {
-        console.error("Error fetching notes: ", e);
-    }
-};
 
-// 2. Function to delete a note
-window.deleteCalendarNote = async (dateId) => {
-    if (!confirm("Delete this note?")) return;
-    const user = auth.currentUser;
-    if (user) {
-        try {
-            await deleteDoc(doc(db, "users", user.uid, "calendar", dateId));
-            fetchAllNotes(); // Refresh the list immediately
-        } catch (e) {
-            alert("Error: " + e.message);
+        const target = document.getElementById(screenId);
+        if (target) {
+            target.style.display = 'block';
+            target.classList.add('active');
         }
     }
-};
 
-// 2. Set Alarm with Note
-window.setNoteAlarm = () => {
-    const timeValue = document.getElementById('alarm-time').value;
-    const note = document.getElementById('alarm-note').value;
+    window.syncTopbarAuthUI = () => {};
 
-    if (!timeValue) return alert("Set a time first!");
+    window.applyGuestModeUI = () => {
+        if (!window.__authDisabled) return;
+        window.syncTopbarAuthUI?.(false);
+    };
 
-    const [hours, minutes] = timeValue.split(':');
-    const now = new Date();
-    const alarmTime = new Date();
-    alarmTime.setHours(hours);
-    alarmTime.setMinutes(minutes);
-    alarmTime.setSeconds(0);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => window.applyGuestModeUI?.());
+    } else {
+        window.applyGuestModeUI?.();
+    }
 
-    // If time has passed today, set for tomorrow
-    if (alarmTime < now) alarmTime.setDate(now.getDate() + 1);
+    // Authentication UI/actions have been removed.
 
-    const diff = alarmTime - now;
-    alert(`Alarm set for ${timeValue}!`);
-
-    setTimeout(() => {
-        // Play sound
-        const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
-        audio.play();
-        
-        // Show Notification with Note
-        if (Notification.permission === "granted") {
-            new Notification("AcademiaPro Alarm", { body: note, icon: "/favicon.ico" });
+    // 4. GUEST ROUTING LOGIC
+        window.syncTopbarAuthUI?.(false);
+        window.__postIntroTarget = 'screen-cards';
+        if (window.__introDismissed) {
+                routeToScreen('screen-cards');
         }
-        alert("🚨 ALARM: " + note);
-    }, diff);
-};
 
-// Request notification permission on load
-if (Notification.permission !== "granted") Notification.requestPermission();
-function updateDynamicCalendarIcon() {
-    const now = new Date();
-    const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-    
-    const dayName = days[now.getDay()];
-    const dateNum = now.getDate();
+        window.renderTodoCards = async () => {
+            const container = document.getElementById('todo-cards-list');
+            const user = getCurrentUser();
+            if (!user || !container) return;
 
-    const dayEl = document.getElementById('cal-icon-day');
-    const numEl = document.getElementById('cal-icon-num');
-
-    if (dayEl && numEl) {
-        dayEl.innerText = dayName;
-        numEl.innerText = dateNum;
-    }
-}
-window.closeIntro = () => {
-    const intro = document.getElementById('intro-page');
-    if (intro) {
-        intro.classList.add('hidden');
-        // Optional: Remove from DOM after fade out
-        setTimeout(() => intro.remove(), 800);
-    }
-};
-
-// Optional: Auto-close after 3 seconds if you don't want them to click
-// setTimeout(window.closeIntro, 3000);
-window.handleForgotPassword = async () => {
-    const email = document.getElementById('auth-email').value;
-    
-    if (!email) {
-        return alert("Please enter your email address first so we can send you a reset link.");
-    }
-
-    try {
-        await sendPasswordResetEmail(auth, email);
-        alert("Password reset email sent! Please check your inbox (and spam folder).");
-    } catch (error) {
-        alert("Error: " + error.message);
-    }
-};
-window.checkPlagiarism = async () => {
-    const text = document.getElementById('plag-input-text').value;
-    const resultDiv = document.getElementById('plag-result');
-    
-    if (text.trim().length < 50) {
-        return alert("Please enter at least 50 words for an accurate scan.");
-    }
-
-    // Show loading state
-    resultDiv.style.display = 'block';
-    document.getElementById('plag-percent').innerText = "Scanning...";
-    document.getElementById('unique-percent').innerText = "...";
-
-    // PRO TIP: To make this real, you would use: 
-    // fetch('https://api.plagiarismchecker.com/v1/check', { method: 'POST', body: ... })
-
-    setTimeout(() => {
-        // This is a simulation for your UI testing
-        const plagScore = Math.floor(Math.random() * 15); // Random low score
-        const uniqueScore = 100 - plagScore;
-
-        document.getElementById('plag-percent').innerText = plagScore + "%";
-        document.getElementById('unique-percent').innerText = uniqueScore + "%";
-        
-        const matchDiv = document.getElementById('plag-matches');
-        if (plagScore > 0) {
-            matchDiv.innerHTML = `<p style="color: #e11d48;"><strong>Matches found:</strong> Sources similar to your text detected in academic journals.</p>`;
-        } else {
-            matchDiv.innerHTML = `<p style="color: #059669;"><strong>Clean Scan:</strong> No significant matches found online.</p>`;
-        }
-    }, 3000);
-};
-// ATTACH TO WINDOW TO MAKE IT GLOBAL
-window.renderTodoCards = async () => {
-    const container = document.getElementById('todo-cards-list');
-    const user = auth.currentUser;
-    if (!user || !container) return;
-
-    try {
-        // Pulling from the 'tasks' collection you already have
+            try {
         const querySnapshot = await getDocs(collection(db, "users", user.uid, "tasks"));
         container.innerHTML = "";
 
@@ -464,66 +130,26 @@ window.renderTodoCards = async () => {
             tasks.push({ id: doc.id, ...doc.data() });
         });
 
-        // Only show active (non-completed) tasks
-        const activeTasks = tasks.filter(t => !t.completed).slice(-5).reverse();
-
-        if (activeTasks.length === 0) {
-            container.innerHTML = `<p style="text-align:center; color:#94a3b8; font-size:0.85rem; padding: 10px;">All tasks finished! 🎉</p>`;
-            return;
-        }
-
-        activeTasks.forEach(task => {
-            const item = document.createElement('div');
-            item.style = "padding: 10px; background: #f0fdf4; border-radius: 8px; border: 1px solid #d1fae5; display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #065f46;";
-            item.innerHTML = `
-                <i class="fa-regular fa-circle-check"></i>
-                <span style="font-weight: 500;">${task.text}</span>
-            `;
-            container.appendChild(item);
-        });
-    } catch (e) {
-        console.error("Todo Card Error:", e);
-    }
-};
-window.renderTodoCards = async () => {
-    const container = document.getElementById('todo-cards-list');
-    const user = auth.currentUser;
-    if (!user || !container) return;
-
-    try {
-        // Fetch tasks from your 'tasks' collection
-        const querySnapshot = await getDocs(collection(db, "users", user.uid, "tasks"));
-        container.innerHTML = "";
-
-        let tasks = [];
-        querySnapshot.forEach(doc => {
-            tasks.push({ id: doc.id, ...doc.data() });
-        });
-
-        // Filter for incomplete tasks and take the top 5
         const activeTasks = tasks.filter(t => !t.completed).slice(0, 5);
 
         if (activeTasks.length === 0) {
-            container.innerHTML = `<p style="text-align:center; color:#94a3b8; font-size:0.9rem; padding: 10px;">No active tasks! ☕</p>`;
+            container.innerHTML = '<p class="dashboard-list-empty">No active tasks.</p>';
             return;
         }
 
-        activeTasks.forEach(task => {
-            const card = document.createElement('div');
-            card.style = "padding: 10px; background: #f0fdf4; border-radius: 8px; border: 1px solid #d1fae5; display: flex; align-items: center; gap: 10px;";
-            card.innerHTML = `
-                <i class="fa-regular fa-circle" style="color: #10b981; font-size: 0.8rem;"></i>
-                <div style="font-weight: 500; color: #065f46; font-size: 0.85rem;">${task.text}</div>
-            `;
-            container.appendChild(card);
-        });
-    } catch (e) {
-        console.error("Error fetching tasks for cards:", e);
-    }
-};
+        container.innerHTML = activeTasks.map(task => `
+            <div class="dashboard-item todo">
+                <i class="fa-regular fa-circle"></i>
+                <div class="dashboard-item-text">${task.text}</div>
+            </div>
+        `).join('');
+            } catch (e) {
+                console.error("Error fetching tasks for cards:", e);
+            }
+        };
 window.renderVaultCards = async () => {
     const container = document.getElementById('vault-cards-list');
-    const user = auth.currentUser;
+    const user = getCurrentUser();
     if (!user || !container) return;
 
     try {
@@ -538,19 +164,16 @@ window.renderVaultCards = async () => {
         const topDocs = docs.slice(-5).reverse();
 
         if (topDocs.length === 0) {
-            container.innerHTML = `<p style="text-align:center; color:#94a3b8; font-size:0.85rem; padding: 10px;">No documents saved.</p>`;
+            container.innerHTML = '<p class="dashboard-list-empty">No documents saved.</p>';
             return;
         }
 
-        topDocs.forEach(doc => {
-            const item = document.createElement('div');
-            item.style = "padding: 10px; background: #f5f3ff; border-radius: 8px; border: 1px solid #ddd6fe; display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #5b21b6;";
-            item.innerHTML = `
+        container.innerHTML = topDocs.map(doc => `
+            <div class="dashboard-item vault">
                 <i class="fa-solid fa-file-lines"></i>
-                <span style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${doc.name}</span>
-            `;
-            container.appendChild(item);
-        });
+                <span class="dashboard-item-text dashboard-item-truncate">${doc.name}</span>
+            </div>
+        `).join('');
     } catch (e) {
         console.error("Vault Card Error:", e);
     }
@@ -558,7 +181,7 @@ window.renderVaultCards = async () => {
 window.generateAIBriefing = async () => {
     const textElement = document.getElementById('ai-briefing-text');
     const briefingCard = document.getElementById('ai-briefing-card');
-    const user = auth.currentUser;
+    const user = getCurrentUser();
 
     if (!user || !textElement || !briefingCard) return;
 
@@ -620,7 +243,26 @@ window.generateAIBriefing = async () => {
 // simple cache helpers
 function getAttendanceCache() {
     try {
-        return JSON.parse(localStorage.getItem('attendance') || '{}');
+        const parsed = JSON.parse(localStorage.getItem('attendance') || '{}');
+        if (!parsed) return {};
+
+        // Legacy data may be an array; normalize to keyed object for reliable persistence.
+        if (Array.isArray(parsed)) {
+            const normalized = {};
+            parsed.forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const subject = String(item.subject || '').trim();
+                const key = String(item.docId || getAttendanceDocId(subject));
+                if (!key) return;
+                normalized[key] = { ...item, docId: key };
+            });
+            return normalized;
+        }
+
+        if (typeof parsed === 'object') {
+            return parsed;
+        }
+        return {};
     } catch {
         return {};
     }
@@ -629,14 +271,23 @@ function setAttendanceCache(cacheObj) {
     localStorage.setItem('attendance', JSON.stringify(cacheObj));
 }
 
+function getAttendanceDocId(subject) {
+    return encodeURIComponent(String(subject || '').trim());
+}
+
 window.addAttendanceItem = async () => {
-    const subject = document.getElementById('att-subject').value.trim();
-    const attended = parseInt(document.getElementById('att-attended').value);
-    const total = parseInt(document.getElementById('att-total').value);
-    const user = auth.currentUser;
+    const subject = String(document.getElementById('att-subject')?.value || '').trim();
+    const attended = parseInt(String(document.getElementById('att-attended')?.value || ''), 10);
+    const total = parseInt(String(document.getElementById('att-total')?.value || ''), 10);
+    const user = getCurrentUser();
 
     if (!subject || isNaN(attended) || isNaN(total)) {
-        alert("Please fill all fields correctly");
+        window.showToast("Please fill all fields correctly", 'warning');
+        return;
+    }
+
+    if (total <= 0 || attended < 0 || attended > total) {
+        window.showToast("Attended must be between 0 and total classes", 'warning');
         return;
     }
 
@@ -652,79 +303,95 @@ window.addAttendanceItem = async () => {
 
     // optimistic UI row
     const tbody = document.getElementById('tbody-attendance');
-    const tempRow = document.createElement('tr');
-    tempRow.id = `temp-${subject.replace(/\s+/g, '')}`;
-    tempRow.style.opacity = "0.5";
-    tempRow.innerHTML = `<td colspan="5" style="padding:12px;">Saving ${subject}...</td>`;
-    tbody.appendChild(tempRow);
+    let tempRow = null;
+    if (tbody) {
+        tempRow = document.createElement('tr');
+        tempRow.id = `temp-${subject.replace(/\s+/g, '')}`;
+        tempRow.className = 'attendance-temp-row';
+        tempRow.innerHTML = `<td colspan="6" class="attendance-temp-cell">Saving ${subject}...</td>`;
+        tbody.appendChild(tempRow);
+    }
 
     document.getElementById('att-subject').value = "";
     document.getElementById('att-attended').value = "";
     document.getElementById('att-total').value = "";
 
-    const record = { subject, attended, total, percentage, status, statusColor: color };
+    const docId = getAttendanceDocId(subject);
+    const record = { docId, subject, attended, total, percentage, status, statusColor: color };
+
+    // always update local cache first so data is not lost on network/firestore errors
+    const cache = getAttendanceCache();
+    cache[docId] = record;
+    setAttendanceCache(cache);
 
     try {
-        if (user) {
-            await setDoc(doc(db, "users", user.uid, "attendance", subject), record);
+        if (ATTENDANCE_CLOUD_SYNC && user) {
+            await setDoc(doc(db, "users", user.uid, "attendance", docId), record);
         }
-        // always update cache
-        const cache = getAttendanceCache();
-        cache[subject] = record;
-        setAttendanceCache(cache);
 
         loadAttendance();
         if(typeof generateAIBriefing === 'function') generateAIBriefing();
+        window.showToast(`${subject} added successfully!`, 'success');
     } catch (e) {
-        tempRow.remove();
-        alert("Failed to save. Check your connection.");
+        if (tempRow) tempRow.remove();
+        loadAttendance();
+        window.showToast("Saved locally. Cloud sync failed; check your connection.", 'warning');
         console.error(e);
     }
 };
 
 window.loadAttendance = async () => {
     const tbody = document.getElementById('tbody-attendance');
-    const user = auth.currentUser;
+    const user = getCurrentUser();
     if (!tbody) return;
 
     // helper to render a set of records object
     const renderRecords = (records) => {
         tbody.innerHTML = "";
         let grandTotal = 0, grandAttended = 0;
-        Object.values(records).forEach(data => {
+        Object.entries(records).forEach(([recordId, rawData]) => {
+            const data = rawData || {};
             const attended = parseInt(data.attended) || 0;
             const total = parseInt(data.total) || 0;
             const percentage = data.percentage || 0;
             grandTotal += total;
             grandAttended += attended;
+            const inShortage = percentage < 75;
 
-            let requiredText = "";
-            if (percentage < 75) {
+            let requiredText = '';
+            if (inShortage) {
                 const needed = Math.ceil((0.75 * total - attended) / 0.25);
-                requiredText = `<span style="color: #ef4444; font-weight: bold;">Attend next ${needed}</span>`;
+                requiredText = `<span class="attendance-required shortage">Attend next ${needed}</span>`;
             } else {
-                requiredText = `<span style="color: #10b981;">Safe</span>`;
+                requiredText = '<span class="attendance-required safe">Safe</span>';
             }
 
+            const statusClass = inShortage ? 'shortage' : 'safe';
+
+            const safeDocId = data.docId || recordId;
+            const encodedSubject = encodeURIComponent(String(data.subject || ''));
+
             const row = document.createElement('tr');
-            row.style.borderBottom = "1px solid #f1f5f9";
+            row.className = 'pro-row';
             row.innerHTML = `
-                <td style="padding: 12px; font-weight: 600;">${data.subject}</td>
-                <td style="padding: 12px;">${attended} / ${total}</td>
-                <td style="padding: 12px; font-weight: bold; color: ${data.statusColor || '#1e293b'}">${percentage}%</td>
-                <td style="padding: 12px;">
-                    <span style="background: ${data.statusColor}22; color: ${data.statusColor}; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">
-                        ${data.status}
+                <td class="pro-cell-title">${data.subject}</td>
+                <td>${attended} / ${total}</td>
+                <td class="attendance-percent ${statusClass}">${percentage}%</td>
+                <td>
+                    <span class="attendance-status-pill ${statusClass}">
+                        ${data.status || (inShortage ? 'Shortage' : 'Safe')}
                     </span>
                 </td>
-                <td style="padding: 12px; font-size: 0.85rem;">${requiredText}</td>
-                <td style="padding: 12px; text-align: right; display: flex; gap: 10px; justify-content: flex-end;">
-                    <button onclick="editAttendance('${data.subject}', ${attended}, ${total})" style="background: none; border: none; color: #3b82f6; cursor: pointer;">
+                <td>${requiredText}</td>
+                <td class="ta-right">
+                    <span class="pro-item-actions">
+                    <button type="button" class="attendance-action-btn edit" onclick="editAttendance('${encodedSubject}', ${attended}, ${total})">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <button onclick="deleteAttendance('${data.subject}')" style="background: none; border: none; color: #ef4444; cursor: pointer;">
+                    <button type="button" class="attendance-action-btn delete" onclick="deleteAttendance('${safeDocId}')">
                         <i class="fa-solid fa-trash"></i>
                     </button>
+                    </span>
                 </td>
             `;
             tbody.appendChild(row);
@@ -742,10 +409,12 @@ window.loadAttendance = async () => {
     };
 
     try {
-        if (user) {
+        if (ATTENDANCE_CLOUD_SYNC && user) {
             const querySnapshot = await getDocs(collection(db, "users", user.uid, "attendance"));
             const records = {};
-            querySnapshot.forEach(docSnap => { records[docSnap.id] = docSnap.data(); });
+            querySnapshot.forEach(docSnap => {
+                records[docSnap.id] = { docId: docSnap.id, ...docSnap.data() };
+            });
             // store cache
             setAttendanceCache(records);
             renderRecords(records);
@@ -763,11 +432,18 @@ window.loadAttendance = async () => {
 };
 
 window.deleteAttendance = async (subjectId) => {
-    const user = auth.currentUser;
-    await deleteDoc(doc(db, "users", user.uid, "attendance", subjectId));
+    const user = getCurrentUser();
+    const cache = getAttendanceCache();
+    delete cache[subjectId];
+    setAttendanceCache(cache);
+
+    if (ATTENDANCE_CLOUD_SYNC && user) {
+        await deleteDoc(doc(db, "users", user.uid, "attendance", subjectId));
+    }
     loadAttendance();
 };
-window.editAttendance = (subject, attended, total) => {
+window.editAttendance = (encodedSubject, attended, total) => {
+    const subject = decodeURIComponent(String(encodedSubject || ''));
     // Fill the input fields with existing data
     document.getElementById('att-subject').value = subject;
     document.getElementById('att-attended').value = attended;
@@ -780,7 +456,7 @@ window.editAttendance = (subject, attended, total) => {
     document.getElementById('att-attended').focus();
 };
 window.syncVaultToCards = async (fileName, fileUrl, fileType) => {
-    const user = auth.currentUser;
+    const user = getCurrentUser();
     if (!user) return;
 
     try {
@@ -898,6 +574,9 @@ function handleSessionSwitch() {
         if (label) label.innerText = "FOCUS";
         timeLeft = document.getElementById('focus-time').value * 60;
     } else {
+        if (typeof window.trackFocusMinutes === 'function') {
+            window.trackFocusMinutes(Number(document.getElementById('focus-time').value || 0));
+        }
         alert("Focus session complete! Your break starts now.");
         if (badge) badge.innerText = "Taking a Break";
         if (modeText) modeText.innerText = "Break";
@@ -1062,6 +741,7 @@ window.deleteLabFile = (index) => {
     if(!confirm(`Delete "${file.name}"?`)) return;
     
     // Remove from local array immediately
+    const fileName = file.name;
     labFiles.splice(index, 1);
     delete labFilesWithStatus[file.id];
     renderLabTable();
@@ -1084,6 +764,8 @@ window.deleteLabFile = (index) => {
         document.getElementById('lab-messages').innerHTML = '';
         activeLabFile = '';
     }
+    
+    window.showToast(`${fileName} deleted!`, 'success');
 };
 
 window.startLabAnalysis = (index) => {
@@ -1443,76 +1125,11 @@ body {
 }
 
 /* Ensure the settings modal also turns dark */
-body.dark-theme .settings-modal, 
-body.dark-theme .profile-dropdown {
+body.dark-theme .settings-modal {
     background-color: var(--card-bg) !important;
     color: var(--text-main);
     border: 1px solid #334155;
 }
-        .user-profile-corner {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-}
-
-.profile-trigger {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: white;
-    padding: 8px 15px;
-    border-radius: 50px;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    transition: 0.3s;
-}
-
-.profile-trigger:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-}
-
-.profile-avatar {
-    width: 35px;
-    height: 35px;
-    background: var(--primary); /* Use your primary color */
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Dropdown Menu */
-.profile-dropdown {
-    display: none;
-    position: absolute;
-    top: 55px;
-    right: 0;
-    background: white;
-    width: 220px;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    padding: 15px;
-    border: 1px solid #e2e8f0;
-}
-
-.profile-dropdown.active {
-    display: block;
-    animation: fadeIn 0.2s ease-out;
-}
-
-.menu-label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 10px; }
-.menu-item { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: #1e293b; }
-.logout-btn { 
-    width: 100%; border: none; background: #fff1f2; color: #e11d48; 
-    padding: 10px; border-radius: 8px; cursor: pointer; margin-top: 10px; 
-    transition: 0.2s; font-weight: 600;
-}
-.logout-btn:hover { background: #ffe4e6; }
-
-@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         
         .chat-bubble.ai-msg p { margin: 0 0 10px 0; }
 .chat-bubble.ai-msg p:last-child { margin-bottom: 0; }
@@ -1632,7 +1249,10 @@ body.dark-theme .profile-dropdown {
             flex: 1;
             padding: 40px;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 14px;
             overflow-y: auto;
         }
 
@@ -1884,271 +1504,385 @@ body.dark-theme .profile-dropdown {
     </style>
 </head>
 <body>
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container"></div>
+
     <div id="intro-page" style="position: fixed; inset: 0; background: var(--primary); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; transition: opacity 0.8s ease;">
     <div style="text-align: center; animation: fadeIn 1.5s ease;">
         <i class="fa-solid fa-graduation-cap" style="font-size: 6rem; margin-bottom: 20px;"></i>
         <h1 style="font-size: 2.5rem; font-weight: 800; margin-bottom: 10px;">AcademiaPro</h1>
         <p style="font-size: 1.2rem; opacity: 0.9;">Your all-in-one smart academic workspace.</p>
         
-        <button onclick="closeIntro()" style="margin-top: 30px; padding: 12px 30px; border-radius: 30px; border: 2px solid white; background: transparent; color: white; cursor: pointer; font-weight: bold; transition: 0.3s;">
+                <button id="intro-get-started" type="button" onclick="closeIntro()" style="margin-top: 30px; padding: 12px 30px; border-radius: 30px; border: 2px solid white; background: transparent; color: white; cursor: pointer; font-weight: bold; transition: 0.3s;">
             Get Started
         </button>
     </div>
 </div>
 
-    <div class="sidebar">
-        <div class="logo"><i class="fa-solid fa-graduation-cap"></i> AcademiaPro</div>
-        <div class="nav-item" onclick="showScreen('screen-dashboard')"><i class="fa-solid fa-user-tie"></i> User Profile</div>
-        <div class="nav-item" onclick="showScreen('screen-cards')">
-    <i class="fa-solid fa-layer-group"></i>
-    <span>Dashboard</span>
-</div>
+<script>
+    // Non-module fallback so intro button still works even if module script errors early.
+    (function () {
+        function fallbackCloseIntro() {
+            var intro = document.getElementById('intro-page');
+            window.__introDismissed = true;
+            if (intro) {
+                intro.style.opacity = '0';
+                setTimeout(function () {
+                    intro.style.display = 'none';
+                }, 800);
+            }
 
-    <div class="sidebar-divider"></div>
-        
-        <div class="nav-item" onclick="showScreen('screen-ai-hub')"><i class="fa-solid fa-brain"></i> AcademiaPro AI</div>
-        <div class="nav-item" onclick="showScreen('screen-vault')"><i class="fa-solid fa-box-archive"></i> Student Vault</div>
-        <div class="nav-item" onclick="showScreen('screen-ai-lab')">
-    <i class="fa-solid fa-microscope"></i>
-    <span>AI Research Lab</span>
-</div>
-        <div class="nav-item" onclick="showScreen('screen-schedule')"><i class="fa-solid fa-calendar-day"></i> Class Schedule</div>
-        <div class="nav-item" onclick="showScreen('screen-todo')"><i class="fa-solid fa-list-check"></i> To-Do List</div>
-        <div class="nav-item" onclick="showScreen('screen-assignments')"><i class="fa-solid fa-bell"></i> Assignments</div>
-        <div class="nav-item" onclick="showScreen('screen-study')"><i class="fa-solid fa-book-open"></i> Study Planner</div>
-        <div class="nav-item" onclick="showScreen('screen-focus')">
-    <i class="fa-solid fa-clock"></i>
-    <span>Focus Timer</span>
-</div>
-        
+            var targetScreen = window.__postIntroTarget || 'screen-cards';
+            window.__postIntroTarget = targetScreen;
+
+            if (typeof window.showScreen === 'function') {
+                window.showScreen(targetScreen);
+                return;
+            }
+
+            var screens = document.querySelectorAll('.tool-screen');
+            for (var i = 0; i < screens.length; i++) {
+                screens[i].style.display = 'none';
+                screens[i].classList.remove('active');
+            }
+            var target = document.getElementById(targetScreen);
+            if (target) {
+                target.style.display = 'block';
+                target.classList.add('active');
+            }
+        }
+
+        if (typeof window.closeIntro !== 'function') {
+            window.closeIntro = fallbackCloseIntro;
+        }
+
+        var btn = document.getElementById('intro-get-started');
+        if (btn) {
+            btn.addEventListener('click', function () {
+                if (typeof window.closeIntro === 'function') {
+                    window.closeIntro();
+                } else {
+                    fallbackCloseIntro();
+                }
+            });
+        }
+    })();
+</script>
+
+    <div class="sidebar" id="app-sidebar">
+        <div class="logo"><i class="fa-solid fa-graduation-cap"></i><span>AcademiaPro</span></div>
+
+        <div class="sidebar-group-title">Planning</div>
+        <div class="nav-item" data-screen="screen-cards" data-label="Dashboard" data-group="Planning" onclick="showScreen('screen-cards')"><i class="fa-solid fa-layer-group"></i><span>Dashboard</span></div>
+        <div class="nav-item" data-screen="screen-schedule" data-label="Class Schedule" data-group="Planning" onclick="showScreen('screen-schedule')"><i class="fa-solid fa-calendar-day"></i><span>Class Schedule</span></div>
+        <div class="nav-item" data-screen="screen-todo" data-label="To-Do List" data-group="Planning" onclick="showScreen('screen-todo')"><i class="fa-solid fa-list-check"></i><span>To-Do List</span></div>
+        <div class="nav-item" data-screen="screen-assignments" data-label="Assignments" data-group="Planning" onclick="showScreen('screen-assignments')"><i class="fa-solid fa-bell"></i><span>Assignments</span></div>
+        <div class="nav-item" data-screen="screen-study" data-label="Study Planner" data-group="Planning" onclick="showScreen('screen-study')"><i class="fa-solid fa-book-open"></i><span>Study Planner</span></div>
+        <div class="nav-item" data-screen="screen-focus" data-label="Focus Timer" data-group="Planning" onclick="showScreen('screen-focus')"><i class="fa-solid fa-clock"></i><span>Focus Timer</span></div>
+        <div class="nav-item" data-screen="screen-attendance" data-label="Attendance Calc" data-group="Planning" onclick="showScreen('screen-attendance')"><i class="fa-solid fa-calculator"></i><span>Attendance Calc</span></div>
+
         <div class="sidebar-divider"></div>
 
-        <div class="nav-item active" onclick="showScreen('screen-convert')"><i class="fa-solid fa-file-word"></i> Word to PDF</div>
-        <div class="nav-item" onclick="showScreen('screen-merge')"><i class="fa-solid fa-layer-group"></i> Merge PDFs</div>
-        <div class="nav-item" onclick="showScreen('screen-split')"><i class="fa-solid fa-scissors"></i> Split PDF</div>
-        <div class="nav-item" onclick="showScreen('screen-protect')"><i class="fa-solid fa-lock"></i> Protect PDF</div>
-        <div class="nav-item" onclick="showScreen('screen-image')"><i class="fa-solid fa-image"></i> PDF to Image</div>
-        <div class="nav-item" onclick="showScreen('screen-img2pdf')"><i class="fa-solid fa-file-image"></i> Image to PDF</div>
-        <div class="nav-item" onclick="showScreen('screen-pdf-ppt')"><i class="fa-solid fa-file-powerpoint"></i> PDF to PPT</div>
+        <div class="sidebar-group-title">Study</div>
+        <div class="nav-item" data-screen="screen-vault" data-label="Student Vault" data-group="Study" onclick="showScreen('screen-vault')"><i class="fa-solid fa-box-archive"></i><span>Student Vault</span></div>
+        <div class="nav-item" data-screen="screen-calculator" data-label="Scientific Calc" data-group="Study" onclick="showScreen('screen-calculator')"><i class="fa-solid fa-square-root-variable"></i><span>Scientific Calc</span></div>
+        <div class="nav-item" data-screen="screen-qr" data-label="Generate QR" data-group="Study" onclick="showScreen('screen-qr')"><i class="fa-solid fa-qrcode"></i><span>Generate QR</span></div>
 
         <div class="sidebar-divider"></div>
 
-        <div class="nav-item" onclick="showScreen('screen-qr')"><i class="fa-solid fa-qrcode"></i> Generate QR</div>
-        <div class="nav-item" onclick="showScreen('screen-attendance')"><i class="fa-solid fa-calculator"></i> Attendance Calc</div>
-        <div class="nav-item" onclick="showScreen('screen-calculator')"><i class="fa-solid fa-calculator"></i> Scientific Calc</div>
-        <div class="nav-item" onclick="showScreen('screen-ai-checker')"><i class="fa-solid fa-robot"></i> AI Detector</div>
-        <div class="nav-item" onclick="showScreen('screen-plagiarism')"><i class="fa-solid fa-copy"></i><span>Plagiarism Checker</span></div>
+        <div class="sidebar-group-title">Documents</div>
+        <div class="nav-item" data-screen="screen-convert" data-label="Word to PDF" data-group="Documents" onclick="showScreen('screen-convert')"><i class="fa-solid fa-file-word"></i><span>Word to PDF</span></div>
+        <div class="nav-item" data-screen="screen-merge" data-label="Merge PDFs" data-group="Documents" onclick="showScreen('screen-merge')"><i class="fa-solid fa-layer-group"></i><span>Merge PDFs</span></div>
+        <div class="nav-item" data-screen="screen-split" data-label="Split PDF" data-group="Documents" onclick="showScreen('screen-split')"><i class="fa-solid fa-scissors"></i><span>Split PDF</span></div>
+        <div class="nav-item" data-screen="screen-protect" data-label="Protect PDF" data-group="Documents" onclick="showScreen('screen-protect')"><i class="fa-solid fa-lock"></i><span>Protect PDF</span></div>
+        <div class="nav-item" data-screen="screen-image" data-label="PDF to Image" data-group="Documents" onclick="showScreen('screen-image')"><i class="fa-solid fa-image"></i><span>PDF to Image</span></div>
+        <div class="nav-item" data-screen="screen-img2pdf" data-label="Image to PDF" data-group="Documents" onclick="showScreen('screen-img2pdf')"><i class="fa-solid fa-file-image"></i><span>Image to PDF</span></div>
+        <div class="nav-item" data-screen="screen-pdf-ppt" data-label="PDF to PPT" data-group="Documents" onclick="showScreen('screen-pdf-ppt')"><i class="fa-solid fa-file-powerpoint"></i><span>PDF to PPT</span></div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="sidebar-group-title">AI</div>
+        <div class="nav-item" data-screen="screen-ai-hub" data-label="AcademiaPro AI" data-group="AI" onclick="showScreen('screen-ai-hub')"><i class="fa-solid fa-brain"></i><span>AcademiaPro AI</span></div>
+        <div class="nav-item" data-screen="screen-ai-lab" data-label="AI Research Lab" data-group="AI" onclick="showScreen('screen-ai-lab')"><i class="fa-solid fa-microscope"></i><span>AI Research Lab</span></div>
+        <div class="nav-item" data-screen="screen-ai-checker" data-label="AI Detector" data-group="AI" onclick="showScreen('screen-ai-checker')"><i class="fa-solid fa-robot"></i><span>AI Detector</span></div>
+        <div class="nav-item" data-screen="screen-plagiarism" data-label="Plagiarism Checker" data-group="AI" onclick="showScreen('screen-plagiarism')"><i class="fa-solid fa-copy"></i><span>Plagiarism Checker</span></div>
+        <div class="nav-item" data-screen="screen-design-qa" data-label="Design QA" data-group="AI" onclick="showScreen('screen-design-qa')"><i class="fa-solid fa-list-check"></i><span>Design QA</span></div>
     </div>
 
     <div class="main-content">
-       <div class="user-profile-corner">
-    <div onclick="toggleProfileMenu()" class="profile-trigger" style="cursor:pointer; background:white; padding:8px 15px; border-radius:50px; display:flex; align-items:center; gap:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1);">
-        <img id="user-nav-pic" src="https://ui-avatars.com/api/?name=User&background=df481a&color=fff" 
-             style="width:45px; height:45px; border-radius:50%; object-fit:cover; border:2px solid var(--primary);">
-        <span id="user-display-email" style="color:#1e293b; font-size:0.9rem; font-weight:600;">User</span>
-    </div>
+        <div class="workspace-topbar app-shell-topbar">
+            <div class="topbar-left">
+                <button id="sidebar-toggle" class="shell-icon-btn" type="button" title="Toggle sidebar">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="workspace-identity">
+                    <h3>AcademiaPro Workspace</h3>
+                    <div class="workspace-breadcrumb">
+                        <span class="crumb-root">Workspace</span>
+                        <i class="fa-solid fa-chevron-right"></i>
+                        <span id="current-screen-group">Planning</span>
+                        <i class="fa-solid fa-chevron-right"></i>
+                        <span id="current-screen-label">Dashboard</span>
+                    </div>
+                </div>
+            </div>
 
-    <div id="profile-dropdown" class="settings-modal" style="display:none; position:absolute; top:50px; right:0; width:280px; background:white; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.1); padding:20px; z-index:1001;">
-        <h3 style="margin:0 0 15px 0; font-size:1.1rem;">Settings</h3>
-        
-        <label style="font-size:0.7rem; color:#64748b; font-weight:700;">PROFILE IMAGE URL</label>
-        <input type="text" id="edit-avatar-url" placeholder="Paste image link here" style="width:100%; margin:8px 0 15px 0; padding:10px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box;">
+            <div class="topbar-right">
+                <button class="quick-action-btn" type="button" onclick="showScreen('screen-todo')">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>New Task</span>
+                </button>
+                <button class="quick-action-btn" type="button" onclick="showScreen('screen-ai-hub')">
+                    <i class="fa-solid fa-brain"></i>
+                    <span>Ask AI</span>
+                </button>
 
-        <label style="font-size:0.7rem; color:#64748b; font-weight:700;">DISPLAY NAME</label>
-        <input type="text" id="edit-username" placeholder="Update your name" style="width:100%; margin:8px 0 15px 0; padding:10px; border:1px solid #ddd; border-radius:8px; box-sizing:border-box;">
-        
-        <button onclick="updateProfile()" class="btn-primary" style="width:100%; margin-bottom:20px;">Save Profile</button>
-        
-        <div style="border-top:1px solid var(--border-light); padding-top:15px;">
-            <p style="font-size:0.8rem; color:var(--text-secondary); font-weight:700; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;">APPEARANCE</p>
-            <div style="display:flex; gap:10px; background: var(--surface-bg); padding: 6px; border-radius: 12px; border: 1px solid var(--border-light);">
-                <button onclick="setTheme('light')" style="flex:1; padding:10px; border-radius:8px; font-size:0.85rem; border:2px solid transparent; cursor:pointer; font-weight:600; transition: all 250ms ease;">☀️ Light</button>
-                <button onclick="setTheme('dark')" style="flex:1; padding:10px; border-radius:8px; font-size:0.85rem; border:2px solid transparent; cursor:pointer; font-weight:600; transition: all 250ms ease;">🌙 Dark</button>
+                <button id="open-command-palette" class="command-trigger" type="button" title="Open command palette (Ctrl/Cmd + K)">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <span>Search or jump...</span>
+                    <kbd>Ctrl K</kbd>
+                </button>
+
+                <button id="notification-btn" class="shell-icon-btn" type="button" title="Notifications">
+                    <i class="fa-solid fa-bell"></i>
+                    <span id="notification-dot" class="notification-dot"></span>
+                </button>
+
+
             </div>
         </div>
-        <button onclick="handleLogout()" style="width:100%; margin-top:20px; background:#fff1f2; color:#e11d48; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:600;">Sign Out</button>
-    </div>
-</div>
-
-<div id="screen-dashboard" class="tool-screen" style="display: none; padding: 20px;">
-    <h2 style="margin-bottom: 25px; color: var(--primary); display: flex; align-items: center; gap: 10px;">
-        <i class="fa-solid fa-user-gear"></i> User Details
-    </h2>
-
-    <div class="card" style="max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 20px; background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center;">
-        
-        <div style="position: relative; display: inline-block; margin-bottom: 25px;">
-            <img id="dash-profile-pic" src="https://ui-avatars.com/api/?name=User" 
-                 style="width: 130px; height: 130px; border-radius: 50%; border: 4px solid var(--primary); object-fit: cover;">
-            
-            <button onclick="toggleUrlInput()" style="position: absolute; bottom: 5px; right: 5px; background: var(--primary); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                <i class="fa-solid fa-camera"></i>
-            </button>
-        </div>
-
-        <div id="url-input-container" style="display: none; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px dashed #cbd5e1;">
-            <label style="font-size: 0.7rem; font-weight: 800; color: #64748b; display: block; margin-bottom: 5px;">PASTE IMAGE URL</label>
-            <input type="text" id="dash-edit-pic-url" placeholder="https://example.com/photo.jpg" 
-                   style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
-        </div>
-
-        <div style="text-align: left; display: flex; flex-direction: column; gap: 15px;">
-            <div>
-                <label style="font-size: 0.7rem; font-weight: 800; color: #64748b;">FULL NAME</label>
-                <input type="text" id="dash-edit-name" placeholder="Enter your name" 
-                       style="width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem; font-weight: 600;">
-            </div>
-            <div style="margin-bottom: 15px;">
-    <label style="font-size: 0.7rem; font-weight: 800; color: #64748b;">STATUS</label>
-    <select id="dash-edit-status" style="width: 100%; margin-top: 5px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: white;">
-        <option value="Student">Student</option>
-        <option value="Researcher">Researcher</option>
-        <option value="Office">Office</option>
-    </select>
-</div>
-
-            <div>
-                <label style="font-size: 0.7rem; font-weight: 800; color: #64748b;">EMAIL ADDRESS (Fixed)</label>
-                <p id="dash-profile-email" style="font-size: 1rem; color: #64748b; margin: 8px 0; padding-left: 5px;">user@example.com</p>
-            </div>
-        </div>
-
-        <button onclick="updateProfile()" class="btn-primary" style="width: 100%; margin-top: 25px; height: 45px;">
-            <i class="fa-solid fa-floppy-disk"></i> Save & Sync Profile
-        </button>
-    </div>
-</div>
-<div id="screen-cards" class="tool-screen" style="display: none; padding: 25px; background: #f8fafc; min-height: 100vh;">
-    <div style="margin-bottom: 30px; display: flex; align-items: center; justify-content: space-between;">
+<div id="screen-cards" class="tool-screen dashboard-screen">
+    <div class="dashboard-header">
         <div>
-            <h2 style="margin: 0; color: #1e293b; font-size: 1.8rem; font-weight: 800;">
-                <i class="fa-solid fa-house-chimney" style="color: var(--primary); margin-right: 10px;"></i> Dashboard
+            <h2 class="dashboard-title">
+                <i class="fa-solid fa-house-chimney"></i> Dashboard
             </h2>
-            <p style="margin: 5px 0 0 0; color: #64748b; font-size: 1rem;">Welcome back, Sagar. Here is your academic overview.</p>
+            <p class="dashboard-subtitle">Welcome back. Here is your academic overview.</p>
         </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; max-width: 1200px;">
-        
-        <div style="grid-column: span 2; display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px;">
-            
-            <div id="ai-briefing-card" style="background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); border-radius: 24px; padding: 25px; color: white; box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4); display: flex; align-items: center; gap: 20px;">
-                <div style="background: rgba(255,255,255,0.2); width: 55px; height: 55px; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; backdrop-filter: blur(10px);">
-                    🪄
-                </div>
-                <div style="flex: 1;">
-                    <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700;">Daily AI Briefing</h3>
-                    <p id="ai-briefing-text" style="margin: 5px 0 0 0; font-size: 0.95rem; opacity: 0.95; line-height: 1.4;">
-                        Analyzing your schedule...
-                    </p>
+    <div class="dashboard-shell-grid">
+        <div class="dashboard-top-grid">
+            <div id="ai-briefing-card" class="dashboard-briefing-card">
+                <div class="dashboard-briefing-icon">🪄</div>
+                <div class="dashboard-briefing-content">
+                    <h3>Daily AI Briefing</h3>
+                    <p id="ai-briefing-text">Analyzing your schedule...</p>
                 </div>
             </div>
 
-            <div class="tool-card" style="margin: 0; background: white; border-radius: 24px; padding: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between;">
-                <div style="flex: 1;">
-                    <h3 style="margin: 0; font-size: 1rem; color: #1e293b; font-weight: 700;">Attendance</h3>
-                    <p style="margin: 2px 0 0 0; font-size: 0.75rem; color: #64748b;">Overall Goal: 75%</p>
+            <div class="tool-card dashboard-card dashboard-attendance-card">
+                <div class="dashboard-attendance-copy">
+                    <h3>Attendance</h3>
+                    <p>Overall Goal: 75%</p>
                 </div>
-                
-                <div id="attendance-pie-chart" style="width: 70px; height: 70px; border-radius: 50%; background: conic-gradient(var(--primary) 0% 0%, #f1f5f9 0% 100%); display: flex; align-items: center; justify-content: center; position: relative; transition: 0.5s ease-in-out;">
-                    <div style="width: 50px; height: 50px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; color: #1e293b;">
+
+                <div id="attendance-pie-chart" class="dashboard-pie-chart">
+                    <div class="dashboard-pie-chart-center">
                         <span id="pie-percentage-text">0%</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="tool-card" style="margin: 0; background: white; border-radius: 24px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 1.1rem; color: #1e293b; font-weight: 700;">Pending Assignments</h3>
-                <span style="background: #fef2f2; color: #ef4444; padding: 4px 10px; border-radius: 10px; font-size: 0.75rem; font-weight: 800;">URGENT</span>
+        <section class="dashboard-analytics-layer" aria-label="Visual Analytics Layer">
+            <div class="dashboard-card-head dashboard-analytics-head">
+                <h3>Visual Analytics Layer</h3>
+                <span class="dashboard-pill">Drag to reorder</span>
             </div>
-            <div id="pending-cards-list" style="flex-grow: 1; display: flex; flex-direction: column; gap: 12px;">
-                <p style="color: #64748b; font-size: 0.9rem;">Loading...</p>
+
+            <div id="analytics-widget-grid" class="analytics-widget-grid">
+                <article class="tool-card dashboard-card analytics-widget" data-widget-id="completion-trend" draggable="true">
+                    <div class="analytics-widget-head">
+                        <h4>Completion Trend</h4>
+                        <span class="widget-drag-handle" title="Drag"><i class="fa-solid fa-grip"></i></span>
+                    </div>
+                    <p id="completion-trend-value" class="analytics-value">0%</p>
+                    <div class="analytics-progress-track"><div id="completion-trend-bar" class="analytics-progress-fill"></div></div>
+                    <p id="completion-trend-caption" class="analytics-caption">No completion data yet.</p>
+                </article>
+
+                <article class="tool-card dashboard-card analytics-widget" data-widget-id="attendance-risk" draggable="true">
+                    <div class="analytics-widget-head">
+                        <h4>Attendance Risk</h4>
+                        <span class="widget-drag-handle" title="Drag"><i class="fa-solid fa-grip"></i></span>
+                    </div>
+                    <p id="attendance-risk-value" class="analytics-value">0 at risk</p>
+                    <p id="attendance-risk-caption" class="analytics-caption">All subjects are safe.</p>
+                </article>
+
+                <article class="tool-card dashboard-card analytics-widget" data-widget-id="upcoming-deadlines" draggable="true">
+                    <div class="analytics-widget-head">
+                        <h4>Upcoming Deadlines</h4>
+                        <span class="widget-drag-handle" title="Drag"><i class="fa-solid fa-grip"></i></span>
+                    </div>
+                    <p id="upcoming-deadlines-value" class="analytics-value">0 due</p>
+                    <p id="upcoming-deadlines-caption" class="analytics-caption">No upcoming deadlines.</p>
+                </article>
+
+                <article class="tool-card dashboard-card analytics-widget" data-widget-id="focus-time" draggable="true">
+                    <div class="analytics-widget-head">
+                        <h4>Focus Time</h4>
+                        <span class="widget-drag-handle" title="Drag"><i class="fa-solid fa-grip"></i></span>
+                    </div>
+                    <p id="focus-time-value" class="analytics-value">0 min</p>
+                    <p id="focus-time-caption" class="analytics-caption">Tracked for this week.</p>
+                </article>
+
+                <article class="tool-card dashboard-card analytics-widget analytics-weekly-review" data-widget-id="weekly-review" draggable="true">
+                    <div class="analytics-widget-head">
+                        <h4>Weekly Review</h4>
+                        <span class="widget-drag-handle" title="Drag"><i class="fa-solid fa-grip"></i></span>
+                    </div>
+                    <p class="analytics-caption analytics-ai-label"><i class="fa-solid fa-sparkles"></i> AI generated summary</p>
+                    <p id="weekly-review-text" class="analytics-weekly-text">Generating your weekly review...</p>
+                </article>
             </div>
-            <button onclick="showScreen('screen-assignments')" style="width: 100%; margin-top: 20px; border: none; background: #f1f5f9; padding: 12px; border-radius: 12px; cursor: pointer; color: #475569; font-weight: 700;">View All</button>
+        </section>
+
+        <div class="tool-card dashboard-card dashboard-feed-card">
+            <div class="dashboard-card-head">
+                <h3>Pending Assignments</h3>
+                <span class="dashboard-pill urgent">Urgent</span>
+            </div>
+            <div id="pending-cards-list" class="dashboard-list"></div>
+            <button onclick="showScreen('screen-assignments')" class="dashboard-action-btn neutral">View All</button>
         </div>
 
-        <div class="tool-card" style="margin: 0; background: white; border-radius: 24px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; font-size: 1.1rem; color: #1e293b; font-weight: 700;">To-Do Tasks</h3>
-                <div style="background: #ecfdf5; color: #10b981; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;">
+        <div class="tool-card dashboard-card dashboard-feed-card">
+            <div class="dashboard-card-head">
+                <h3>To-Do Tasks</h3>
+                <div class="dashboard-icon-chip success">
                     <i class="fa-solid fa-check"></i>
                 </div>
             </div>
-            <div id="todo-cards-list" style="flex-grow: 1; display: flex; flex-direction: column; gap: 12px;">
-                <p style="color: #64748b; font-size: 0.9rem;">Loading...</p>
-            </div>
-            <button onclick="showScreen('screen-todo')" style="width: 100%; margin-top: 20px; border: none; background: #10b981; padding: 12px; border-radius: 12px; cursor: pointer; color: white; font-weight: 700;">Manage Tasks</button>
+            <div id="todo-cards-list" class="dashboard-list"></div>
+            <button onclick="showScreen('screen-todo')" class="dashboard-action-btn success">Manage Tasks</button>
         </div>
 
-        <div class="tool-card" style="grid-column: span 2; margin: 0; background: white; border-radius: 24px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div class="tool-card dashboard-card dashboard-vault-card">
+            <div class="dashboard-card-head">
                 <div>
-                    <h3 style="margin: 0; font-size: 1.1rem; color: #1e293b; font-weight: 700;">Vault Documents</h3>
-                    <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #94a3b8;">Recently secured files</p>
+                    <h3>Vault Documents</h3>
+                    <p class="dashboard-card-sub">Recently secured files</p>
                 </div>
-                <i class="fa-solid fa-file-shield" style="color: #8b5cf6; font-size: 1.5rem;"></i>
+                <i class="fa-solid fa-file-shield dashboard-vault-icon"></i>
             </div>
-            <div id="vault-cards-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <p style="color: #64748b; font-size: 0.9rem;">Loading documents...</p>
-            </div>
-            <button onclick="showScreen('screen-vault')" style="width: 100%; margin-top: 20px; border: 2px dashed #e2e8f0; background: transparent; padding: 12px; border-radius: 12px; cursor: pointer; color: #8b5cf6; font-weight: 700;">Open Secure Vault</button>
+            <div id="vault-cards-list" class="dashboard-vault-grid"></div>
+            <button onclick="showScreen('screen-vault')" class="dashboard-action-btn dashed">Open Secure Vault</button>
         </div>
     </div>
 </div>
+        <div id="screen-design-qa" class="tool-screen">
+            <div class="tool-card card-w-850">
+                <div class="design-qa-head">
+                    <div>
+                        <h2><i class="fa-solid fa-swatchbook"></i> Component QA Checklist</h2>
+                        <p class="hint">Product-grade state parity for each core feature.</p>
+                    </div>
+                    <button class="dashboard-action-btn neutral design-qa-refresh" type="button" onclick="renderComponentChecklist()">
+                        <i class="fa-solid fa-rotate"></i> Refresh
+                    </button>
+                </div>
+
+                <div class="design-token-grid" id="design-token-grid">
+                    <div class="design-token-item">
+                        <span class="token-label">Colors</span>
+                        <strong class="token-value">Semantic + State</strong>
+                    </div>
+                    <div class="design-token-item">
+                        <span class="token-label">Typography</span>
+                        <strong class="token-value">Scale + Weights</strong>
+                    </div>
+                    <div class="design-token-item">
+                        <span class="token-label">Spacing</span>
+                        <strong class="token-value">4/8/12/16/24/32</strong>
+                    </div>
+                    <div class="design-token-item">
+                        <span class="token-label">Shadows</span>
+                        <strong class="token-value">Sm to 2xl</strong>
+                    </div>
+                    <div class="design-token-item">
+                        <span class="token-label">Radii</span>
+                        <strong class="token-value">Sm to Full</strong>
+                    </div>
+                </div>
+
+                <div class="design-qa-table-wrap">
+                    <table class="data-table design-qa-table">
+                        <thead>
+                            <tr>
+                                <th>Feature</th>
+                                <th>Empty</th>
+                                <th>Loading</th>
+                                <th>Error</th>
+                                <th>Success</th>
+                                <th>Coverage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="component-checklist-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
         <div id="screen-ai-hub" class="tool-screen">
-            <div style="display: flex; gap: 25px; width: 100%; max-width: 1100px; align-items: stretch;">
-                <div class="tool-card" style="flex: 2; display: flex; flex-direction: column;">
-                    <h2 style="color: var(--primary)"><i class="fa-solid fa-robot"></i> AcademiaPro AI</h2>
-                    <div id="ai-chat-box" style="flex: 1; min-height: 400px; background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; overflow-y: auto; margin: 15px 0; display: flex; flex-direction: column;">
+            <div class="ai-hub-layout">
+                <div class="tool-card ai-hub-card">
+                    <h2><i class="fa-solid fa-robot"></i> AcademiaPro AI</h2>
+                    <div id="ai-chat-box" class="ai-hub-chatbox">
     <div class="chat-bubble ai-msg">
         Hello! I'm your AcademiaPro AI councelor. How can I help you with your work today?
     </div>
 </div>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" id="ai-query" placeholder="e.g., Help me improve my grades" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; outline: none;">
-                        <button class="btn-primary" style="width: auto; margin: 0; padding: 0 20px;" onclick="askAITutor()">Ask</button>
+                    <div class="ai-hub-input-row">
+                        <input type="text" id="ai-query" class="ai-hub-input" placeholder="e.g., Help me improve my grades">
+                        <button class="btn-primary btn-inline" onclick="askAITutor()">Ask</button>
                     </div>
                 </div>
             </div>
         </div>
 
         <div id="screen-vault" class="tool-screen">
-            <div class="tool-card" style="max-width: 850px; width: 100%;">
-                <h2 style="color: var(--student-hub)">Student Vault</h2>
+            <div class="tool-card card-w-850">
+                <h2>Student Vault</h2>
                 <p class="hint">Permanent storage for your research and academic documents</p>
-                <div style="background: #f8fafc; padding: 20px; border-radius: 16px; margin-bottom: 25px; border: 1px solid #e2e8f0;">
-                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                        <div class="input-group" style="flex: 2; min-width: 200px; margin-bottom: 0;">
+                <div class="vault-panel">
+                    <div class="entry-row">
+                        <div class="input-group entry-col-2 floating">
+                            <input type="text" id="vault-name" placeholder=" ">
                             <label>Document Name</label>
-                            <input type="text" id="vault-name" placeholder="e.g. Your PDF Document">
+                            <div class="input-helper">Give your file a descriptive name</div>
                         </div>
-                        <div class="input-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
-                            <label>Category</label>
-                            <select id="vault-category" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        <div class="input-group entry-col-1 floating">
+                            <select id="vault-category" class="vault-category-select">
+                                <option value="">Select Category</option>
                                 <option value="Academic">Academic</option>
                                 <option value="Research">Research</option>
                                 <option value="Fellowship">Fellowship</option>
                                 <option value="Personal">Personal</option>
                             </select>
+                            <label>Category</label>
+                            <div class="input-helper">Organize your files</div>
                         </div>
                     </div>
-                    <label class="upload-area" for="vault-file-input" style="padding: 20px; margin-top: 15px;">
-                        <i class="fa-solid fa-cloud-arrow-up" style="font-size: 1.5rem; color: #cbd5e1;"></i>
+
+                    <label class="upload-area vault-upload-area" for="vault-file-input">
+                        <i class="fa-solid fa-cloud-arrow-up vault-upload-icon"></i>
                         <p id="vault-file-label">Select File (PDF, PPT, Image, etc.)</p>
                         <input type="file" id="vault-file-input" hidden onchange="document.getElementById('vault-file-label').innerText = this.files[0].name">
                     </label>
+                    
                     <button class="btn-hub" onclick="uploadToVault()">Save to Vault</button>
                 </div>
+                
                 <div class="hub-list">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <table class="data-table">
                         <thead>
-                            <tr style="border-bottom: 2px solid #e2e8f0; color: #64748b;">
-                                <th style="padding: 10px;">Name</th>
-                                <th style="padding: 10px;">Category</th>
-                                <th style="padding: 10px;">Date Added</th>
-                                <th style="padding: 10px; text-align: right;">Actions</th>
+                            <tr>
+                                <th>Name</th>
+                                <th>Category</th>
+                                <th>Date Added</th>
+                                <th class="ta-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-vault"></tbody>
@@ -2158,125 +1892,231 @@ body.dark-theme .profile-dropdown {
         </div>
 
         <div id="screen-schedule" class="tool-screen">
-            <div class="tool-card" style="max-width: 800px; width: 100%;">
-                <h2 style="color: var(--student-hub)">Class Schedule</h2>
+            <div class="tool-card card-w-800">
+                <h2>Class Schedule</h2>
                 <p class="hint">Organize your Lectures and Lab Sessions</p>
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <div class="input-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                <div class="entry-row">
+                    <div class="input-group entry-col-1 floating">
+                        <input type="date" id="sch-day" placeholder=" ">
                         <label>Day/Date</label>
-                        <input type="date" id="sch-day">
+                        <div class="input-helper">Pick the class date</div>
                     </div>
-                    <div class="input-group" style="flex: 2; min-width: 200px; margin-bottom: 0;">
+                    <div class="input-group entry-col-2 floating">
+                        <input type="text" id="sch-title" placeholder=" ">
                         <label>Title</label>
-                        <input type="text" id="sch-title" placeholder="e.g. Neurochemistry Lab">
+                        <div class="input-helper">e.g. Neurochemistry Lab</div>
                     </div>
-                    <div class="input-group" style="flex: 1; min-width: 120px; margin-bottom: 0;">
+                    <div class="input-group entry-col-1 floating">
+                        <input type="time" id="sch-time" placeholder=" ">
                         <label>Time</label>
-                        <input type="time" id="sch-time">
+                        <div class="input-helper">Class start time</div>
                     </div>
-                    <button class="btn-hub" style="flex: 0.5; margin-top: 25px;" onclick="addScheduleTableItem()">Add</button>
+                    <button class="btn-hub entry-add-btn" onclick="addScheduleTableItem()">Add</button>
                 </div>
-                <div class="hub-list">
-                    <table id="table-schedule" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid #e2e8f0; color: #64748b;">
-                                <th style="padding: 10px;">Day/Date</th>
-                                <th style="padding: 10px;">Title</th>
-                                <th style="padding: 10px;">Time</th>
-                                <th style="padding: 10px; text-align: right;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-schedule"></tbody>
-                    </table>
+
+                <div class="pro-data-layout">
+                    <aside class="pro-data-sidebar">
+                        <div class="pro-data-controls" id="schedule-controls">
+                            <div class="pro-view-tabs">
+                                <button type="button" class="view-tab active" data-view="list" onclick="setDataView('schedule','list')">List</button>
+                                <button type="button" class="view-tab" data-view="calendar" onclick="setDataView('schedule','calendar')">Calendar</button>
+                                <button type="button" class="view-tab" data-view="board" onclick="setDataView('schedule','board')">Board</button>
+                            </div>
+                            <div class="pro-filter-chips">
+                                <button type="button" class="filter-chip active" data-filter="today" onclick="setDataFilter('schedule','today')">Today</button>
+                                <button type="button" class="filter-chip" data-filter="thisWeek" onclick="setDataFilter('schedule','thisWeek')">This Week</button>
+                                <button type="button" class="filter-chip" data-filter="overdue" onclick="setDataFilter('schedule','overdue')">Overdue</button>
+                                <button type="button" class="filter-chip" data-filter="completed" onclick="setDataFilter('schedule','completed')">Completed</button>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <div class="pro-data-content">
+                        <div id="schedule-view-list" class="pro-data-view active hub-list">
+                            <table id="table-schedule" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Day/Date</th>
+                                        <th>Title</th>
+                                        <th>Time</th>
+                                        <th>Status</th>
+                                        <th class="ta-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-schedule"></tbody>
+                            </table>
+                        </div>
+
+                        <div id="schedule-view-calendar" class="pro-data-view pro-calendar-grid"></div>
+                        <div id="schedule-view-board" class="pro-data-view pro-board-grid"></div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div id="screen-todo" class="tool-screen">
-            <div class="tool-card">
-                <h2 style="color: var(--student-hub)">To-Do List</h2>
-                <div class="input-group">
-                    <label>New Task (e.g., Assignment deadline)</label>
-                    <input type="text" id="input-todo" placeholder="What needs to be done?">
-                    <button class="btn-hub" onclick="addItem('todo', 'input-todo')">Add Task</button>
+            <div class="tool-card card-w-900">
+                <h2>To-Do List</h2>
+                <p class="hint">Plan tasks with due dates and completion tracking</p>
+                <div class="entry-row">
+                    <div class="input-group entry-col-todo-main floating">
+                        <input type="text" id="input-todo" placeholder=" ">
+                        <label>Task</label>
+                        <div class="input-helper">What needs to be done?</div>
+                    </div>
+                    <div class="input-group entry-col-1 floating">
+                        <input type="date" id="todo-deadline" placeholder=" ">
+                        <label>Due Date</label>
+                        <div class="input-helper">Set deadline for task</div>
+                    </div>
+                    <button class="btn-hub entry-add-btn" onclick="addTodoItem()">Add Task</button>
                 </div>
-                <div id="list-todo" class="hub-list"></div>
+
+                <div class="pro-data-layout">
+                    <aside class="pro-data-sidebar">
+                        <div class="pro-data-controls" id="todo-controls">
+                            <div class="pro-view-tabs">
+                                <button type="button" class="view-tab active" data-view="list" onclick="setDataView('todo','list')">List</button>
+                                <button type="button" class="view-tab" data-view="calendar" onclick="setDataView('todo','calendar')">Calendar</button>
+                                <button type="button" class="view-tab" data-view="board" onclick="setDataView('todo','board')">Board</button>
+                            </div>
+                            <div class="pro-filter-chips">
+                                <button type="button" class="filter-chip active" data-filter="today" onclick="setDataFilter('todo','today')">Today</button>
+                                <button type="button" class="filter-chip" data-filter="thisWeek" onclick="setDataFilter('todo','thisWeek')">This Week</button>
+                                <button type="button" class="filter-chip" data-filter="overdue" onclick="setDataFilter('todo','overdue')">Overdue</button>
+                                <button type="button" class="filter-chip" data-filter="completed" onclick="setDataFilter('todo','completed')">Completed</button>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <div class="pro-data-content">
+                        <div id="todo-view-list" class="pro-data-view active hub-list">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Task</th>
+                                        <th>Due</th>
+                                        <th>Status</th>
+                                        <th class="ta-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-todo"></tbody>
+                            </table>
+                        </div>
+
+                        <div id="todo-view-calendar" class="pro-data-view pro-calendar-grid"></div>
+                        <div id="todo-view-board" class="pro-data-view pro-board-grid"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div id="screen-assignments" class="tool-screen">
-            <div class="tool-card" style="max-width: 800px; width: 100%;">
-                <h2 style="color: var(--student-hub)">Assignment Reminders</h2>
+            <div class="tool-card card-w-800">
+                <h2>Assignment Reminders</h2>
                 <p class="hint">Track deadlines for your Assignments and Lab work</p>
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-                    <div class="input-group" style="flex: 2; min-width: 200px; margin-bottom: 0;">
+                <div class="entry-row">
+                    <div class="input-group entry-col-2 floating">
+                        <input type="text" id="asn-title" placeholder=" ">
                         <label>Title</label>
-                        <input type="text" id="asn-title" placeholder="e.g. Do it now">
+                        <div class="input-helper">Assignment or task name</div>
                     </div>
-                    <div class="input-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                    <div class="input-group entry-col-1 floating">
+                        <input type="date" id="asn-deadline" placeholder=" ">
                         <label>Deadline Date</label>
-                        <input type="date" id="asn-deadline">
+                        <div class="input-helper">Final submission date</div>
                     </div>
-                    <button class="btn-hub" style="flex: 0.5; margin-top: 25px;" onclick="addAssignmentTableItem()">Add</button>
+                    <button class="btn-hub entry-add-btn" onclick="addAssignmentTableItem()">Add</button>
                 </div>
-                <div class="hub-list">
-                    <table id="table-assignments" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid #e2e8f0; color: #64748b;">
-                                <th style="padding: 10px;">Assignment</th>
-                                <th style="padding: 10px;">Deadline</th>
-                                <th style="padding: 10px; text-align: right;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbody-assignments"></tbody>
-                    </table>
+
+                <div class="pro-data-layout">
+                    <aside class="pro-data-sidebar">
+                        <div class="pro-data-controls" id="assignments-controls">
+                            <div class="pro-view-tabs">
+                                <button type="button" class="view-tab active" data-view="list" onclick="setDataView('assignments','list')">List</button>
+                                <button type="button" class="view-tab" data-view="calendar" onclick="setDataView('assignments','calendar')">Calendar</button>
+                                <button type="button" class="view-tab" data-view="board" onclick="setDataView('assignments','board')">Board</button>
+                            </div>
+                            <div class="pro-filter-chips">
+                                <button type="button" class="filter-chip active" data-filter="today" onclick="setDataFilter('assignments','today')">Today</button>
+                                <button type="button" class="filter-chip" data-filter="thisWeek" onclick="setDataFilter('assignments','thisWeek')">This Week</button>
+                                <button type="button" class="filter-chip" data-filter="overdue" onclick="setDataFilter('assignments','overdue')">Overdue</button>
+                                <button type="button" class="filter-chip" data-filter="completed" onclick="setDataFilter('assignments','completed')">Completed</button>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <div class="pro-data-content">
+                        <div id="assignments-view-list" class="pro-data-view active hub-list">
+                            <table id="table-assignments" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Assignment</th>
+                                        <th>Deadline</th>
+                                        <th>Status</th>
+                                        <th class="ta-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-assignments"></tbody>
+                            </table>
+                        </div>
+
+                        <div id="assignments-view-calendar" class="pro-data-view pro-calendar-grid"></div>
+                        <div id="assignments-view-board" class="pro-data-view pro-board-grid"></div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div id="screen-study" class="tool-screen">
-            <div class="tool-card" style="max-width: 900px; width: 100%; background: #fdfdfd; border: 1px solid #e2e8f0;">
-                <h2 style="color: var(--student-hub); font-family: 'Inter', sans-serif; letter-spacing: 1px;">DAILY STUDY PLAN</h2>
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                    <input type="text" id="study-date" placeholder="Date" style="width: 150px; border: none; border-bottom: 1px solid #cbd5e1; outline: none; text-align: center;">
+            <div class="tool-card card-w-900 study-card">
+                <h2 class="study-title">DAILY STUDY PLAN</h2>
+                <div class="study-date-wrap">
+                    <input type="text" id="study-date" placeholder="Date" class="study-date-input">
                 </div>
-                <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-                    <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
-                        <div style="background: #fff; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; text-align: left;">
-                            <label style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Today Subject</label>
-                            <textarea id="study-subject" style="width: 100%; height: 60px; border: none; resize: none; margin-top: 5px; outline: none;" placeholder="e.g. Computational Neuroscience"></textarea>
+
+                <div class="study-layout">
+                    <div class="study-col-left">
+                        <div class="study-panel">
+                            <label class="study-mini-label">Today Subject</label>
+                            <textarea id="study-subject" class="study-textarea subject" placeholder="e.g. Computational Neuroscience"></textarea>
                         </div>
-                        <div style="background: #fff; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; text-align: left;">
-                            <label style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Study Session Goal</label>
-                            <textarea id="study-goals" style="width: 100%; height: 100px; border: none; resize: none; margin-top: 5px; outline: none;" placeholder="Complete AMIGO"></textarea>
+
+                        <div class="study-panel">
+                            <label class="study-mini-label">Study Session Goal</label>
+                            <textarea id="study-goals" class="study-textarea goal" placeholder="Complete AMIGO"></textarea>
                         </div>
                     </div>
-                    <div style="flex: 1; background: #fff; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; text-align: left;">
-                        <label style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Schedule</label>
-                        <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-                            <div style="display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;"><span style="font-size: 11px; color: #94a3b8; width: 60px;">09-10 AM</span><input type="text" class="time-slot" style="border: none; outline: none; flex: 1; font-size: 13px;"></div>
-                            <div style="display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;"><span style="font-size: 11px; color: #94a3b8; width: 60px;">10-11 AM</span><input type="text" class="time-slot" style="border: none; outline: none; flex: 1; font-size: 13px;"></div>
-                            <div style="display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;"><span style="font-size: 11px; color: #94a3b8; width: 60px;">11-12 AM</span><input type="text" class="time-slot" style="border: none; outline: none; flex: 1; font-size: 13px;"></div>
-                            <div style="display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;"><span style="font-size: 11px; color: #94a3b8; width: 60px;">12-01 PM</span><input type="text" class="time-slot" style="border: none; outline: none; flex: 1; font-size: 13px;"></div>
-                            <div style="display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;"><span style="font-size: 11px; color: #94a3b8; width: 60px;">01-02 PM</span><input type="text" class="time-slot" style="border: none; outline: none; flex: 1; font-size: 13px;"></div>
+
+                    <div class="study-panel study-schedule-panel">
+                        <label class="study-mini-label">Schedule</label>
+                        <div class="study-schedule-list">
+                            <div class="study-schedule-row"><span class="study-time-label">09-10 AM</span><input type="text" class="time-slot study-time-input"></div>
+                            <div class="study-schedule-row"><span class="study-time-label">10-11 AM</span><input type="text" class="time-slot study-time-input"></div>
+                            <div class="study-schedule-row"><span class="study-time-label">11-12 AM</span><input type="text" class="time-slot study-time-input"></div>
+                            <div class="study-schedule-row"><span class="study-time-label">12-01 PM</span><input type="text" class="time-slot study-time-input"></div>
+                            <div class="study-schedule-row"><span class="study-time-label">01-02 PM</span><input type="text" class="time-slot study-time-input"></div>
                         </div>
                     </div>
                 </div>
-                <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                        <thead style="background: #f1f5f9; color: #64748b; font-size: 10px;">
-                            <tr><th style="padding: 10px; width: 40px; text-align: center;"><i class="fa-solid fa-check"></i></th><th style="padding: 10px;">TASKS</th><th style="padding: 10px; width: 100px;">TIMES</th><th style="padding: 10px; width: 50px;"></th></tr>
+
+                <div class="study-table-wrap">
+                    <table class="study-table">
+                        <thead>
+                            <tr><th class="ta-center col-check"><i class="fa-solid fa-check"></i></th><th>TASKS</th><th class="col-time">TIMES</th><th class="col-action"></th></tr>
                         </thead>
                         <tbody id="study-tasks-body"></tbody>
                     </table>
-                    <div style="padding: 10px; display: flex; gap: 10px; background: #fafafa;">
-                        <input type="text" id="new-task-name" placeholder="Add task..." style="flex: 2; padding: 8px; border-radius: 5px; border: 1px solid #cbd5e1;">
-                        <input type="text" id="new-task-time" placeholder="Time" style="flex: 1; padding: 8px; border-radius: 5px; border: 1px solid #cbd5e1;">
-                        <button class="btn-hub" style="width: auto; margin: 0; padding: 0 20px;" onclick="addStudyTask()">Add</button>
+
+                    <div class="study-task-input-row">
+                        <input type="text" id="new-task-name" placeholder="Add task..." class="study-task-name-input">
+                        <input type="text" id="new-task-time" placeholder="Time" class="study-task-time-input">
+                        <button class="btn-hub btn-inline" onclick="addStudyTask()">Add</button>
                     </div>
                 </div>
             </div>
         </div>
+
 
         <div id="screen-convert" class="tool-screen active">
             <div class="tool-card">
@@ -2407,38 +2247,42 @@ body.dark-theme .profile-dropdown {
             </div>
         </div>
 
-        <div id="screen-attendance" class="tool-screen" style="display: none;">
-    <div class="tool-card" style="max-width: 900px; width: 100%;">
-        <h2 style="color: var(--primary)">Attendance Tracker</h2>
+        <div id="screen-attendance" class="tool-screen">
+    <div class="tool-card card-w-900 attendance-card">
+        <h2>Attendance Tracker</h2>
         <p class="hint">Monitor your presence and stay above the required percentage.</p>
         
-        <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-            <div class="input-group" style="flex: 2; min-width: 200px; margin-bottom: 0;">
+        <div class="entry-row attendance-entry-row">
+            <div class="input-group entry-col-2 floating">
+                <input type="text" id="att-subject" placeholder=" ">
                 <label>Subject Name</label>
-                <input type="text" id="att-subject" placeholder="e.g. Physics">
+                <div class="input-helper">Course or subject name</div>
             </div>
-            <div class="input-group" style="flex: 1; min-width: 100px; margin-bottom: 0;">
+            <div class="input-group entry-col-1 attendance-col-small floating">
+                <input type="number" id="att-attended" placeholder=" " min="0">
                 <label>Attended</label>
-                <input type="number" id="att-attended" placeholder="0">
+                <div class="input-helper">Classes attended</div>
             </div>
-            <div class="input-group" style="flex: 1; min-width: 100px; margin-bottom: 0;">
+            <div class="input-group entry-col-1 attendance-col-small floating">
+                <input type="number" id="att-total" placeholder=" " min="0">
                 <label>Total Classes</label>
-                <input type="number" id="att-total" placeholder="0">
+                <div class="input-helper">Total held</div>
             </div>
-            <button class="btn-primary" style="margin-top: 25px;" onclick="addAttendanceItem()">Add Subject</button>
+            <button type="button" id="att-add-btn" class="btn-primary attendance-add-btn" onclick="window.addAttendanceItem?.()">Add Subject</button>
         </div>
 
         <div class="hub-list">
-            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
-                <thead style="background: #f8fafc;">
-    <tr style="border-bottom: 2px solid #e2e8f0; color: #64748b;">
-        <th style="padding: 12px;">Subject</th>
-        <th style="padding: 12px;">Ratio</th>
-        <th style="padding: 12px;">Percentage</th>
-        <th style="padding: 12px;">Status</th>
-        <th style="padding: 12px;">Required Classes</th> <th style="padding: 12px; text-align: right;">Action</th>
-    </tr>
-</thead>
+            <table class="data-table attendance-table">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Ratio</th>
+                        <th>Percentage</th>
+                        <th>Status</th>
+                        <th>Required Classes</th>
+                        <th class="ta-right">Action</th>
+                    </tr>
+                </thead>
                 <tbody id="tbody-attendance"></tbody>
             </table>
         </div>
@@ -2497,10 +2341,10 @@ body.dark-theme .profile-dropdown {
     <button onclick="startFreshConversion()" id="conv-btn" class="btn-hub" style="width: 100%; font-weight: bold;">Start Conversion</button>
 </div>
 </div>
-<div id="screen-focus" class="screen" style="display: none;">
+<div id="screen-focus" class="tool-screen" style="display: none;">
     <div class="timer-container" style="max-width: 450px; margin: 40px auto; position: relative; padding: 50px 30px 30px 30px; display: flex; flex-direction: column; align-items: center; background: white; border-radius: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
         
-        <button onclick="closeFocusTimer()" style="position: absolute; top: 20px; right: 20px; background: #f1f5f9; border: none; width: 35px; height: 35px; border-radius: 50%; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; z-index: 10;">
+        <button id="focus-close-btn" type="button" onclick="closeFocusTimer()" style="position: absolute; top: 20px; right: 20px; background: #f1f5f9; border: none; width: 35px; height: 35px; border-radius: 50%; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; z-index: 10;">
             <i class="fa-solid fa-xmark"></i>
         </button>
 
@@ -2541,6 +2385,46 @@ body.dark-theme .profile-dropdown {
         </div>
     </div>
 </div>
+
+<script>
+    // Fallback binding so focus close button works even if module handlers fail to attach.
+    (function () {
+        function fallbackCloseFocusTimer() {
+            var focusScreen = document.getElementById('screen-focus');
+            if (focusScreen) {
+                focusScreen.style.display = 'none';
+                focusScreen.classList.remove('active');
+            }
+
+            if (typeof window.showScreen === 'function') {
+                window.showScreen('screen-cards');
+                return;
+            }
+
+            var cards = document.getElementById('screen-cards');
+            if (cards) {
+                cards.style.display = 'block';
+                cards.classList.add('active');
+            }
+        }
+
+        if (typeof window.closeFocusTimer !== 'function') {
+            window.closeFocusTimer = fallbackCloseFocusTimer;
+        }
+
+        var closeBtn = document.getElementById('focus-close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function () {
+                if (typeof window.closeFocusTimer === 'function') {
+                    window.closeFocusTimer();
+                } else {
+                    fallbackCloseFocusTimer();
+                }
+            });
+        }
+    })();
+</script>
+
 <div id="screen-ai-checker" class="tool-screen" style="display:none;">
     <div class="container" style="max-width: 900px; margin: 0 auto; padding: 40px 20px;">
         <div class="tool-card">
@@ -2559,46 +2443,6 @@ body.dark-theme .profile-dropdown {
                 <h3 id="ai-verdict" style="margin: 5px 0;">Ready to Scan</h3>
                 <p id="ai-status" style="font-size: 0.9rem; color: #64748b;">Analysis results will appear here after scanning.</p>
             </div>
-        </div>
-    </div>
-</div>
-<div id="screen-auth" class="tool-screen">
-    <div class="tool-card" style="max-width: 400px; margin: 0 auto;">
-        <h2 style="color: var(--primary)"><i class="fa-solid fa-user-shield"></i> AcademiaPro Login</h2>
-        <p class="hint">Please sign in to save your work</p>
-        
-        <div class="auth-container" style="margin-top: 10px;">
-            <input type="email" id="auth-email" placeholder="Email" class="input-field" style="width: 100%; margin-bottom: 10px; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-            <input type="password" id="auth-pass" placeholder="Password" class="input-field" style="width: 100%; margin-bottom: 20px; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-            <p style="text-align: right; margin-top: -10px; margin-bottom: 15px;">
-    <a href="#" onclick="handleForgotPassword()" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;">Forgot Password?</a>
-</p>
-            
-            <div style="display: flex; gap: 10px;">
-                <button onclick="handleSignUp()" class="btn-hub" style="flex: 1;">Register</button>
-                <button onclick="handleLogin()" class="btn-primary" style="flex: 1; margin-top: 0;">Sign In</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div id="screen-profile-setup" class="tool-screen">
-    <div class="tool-card" style="max-width: 500px; margin: 0 auto;">
-        <h2>🚀 Complete Your Profile</h2>
-        <p class="hint">Tell us a bit about yourself to personalize your workspace.</p>
-        
-        <div class="setup-form" style="margin-top: 20px; text-align: left;">
-            <label>Full Name</label>
-            <input type="text" id="setup-name" placeholder="e.g. John Doe" class="input-field" style="width:100%; margin-bottom:15px;">
-            
-            <label>Academic Role</label>
-            <select id="setup-role" class="input-field" style="width:100%; margin-bottom:20px; padding: 10px;">
-                <option value="student">Student</option>
-                <option value="researcher">Researcher</option>
-                <option value="professor">Professor</option>
-            </select>
-
-            <button onclick="saveProfessionalProfile()" class="btn-primary" style="width: 100%;">Finish Setup</button>
         </div>
     </div>
 </div>
@@ -2630,6 +2474,20 @@ body.dark-theme .profile-dropdown {
         </div>
     </div>
 </div>
+</div>
+
+<div id="command-palette" class="command-palette" aria-hidden="true">
+    <div class="command-palette-backdrop" onclick="closeCommandPalette()"></div>
+    <div class="command-palette-dialog" role="dialog" aria-label="Command Palette">
+        <div class="command-palette-head">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input id="command-input" type="text" placeholder="Search features..." autocomplete="off" />
+            <button type="button" onclick="closeCommandPalette()" aria-label="Close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div id="command-results" class="command-results"></div>
+    </div>
 </div>
 <div id="screen-ai-lab" class="tool-screen" 
      style="display:none; flex-direction: column; align-items: center; width: 100%; height: 100vh; overflow-y: auto; padding: 40px; box-sizing: border-box;">
@@ -2743,85 +2601,1447 @@ async function startFreshConversion() {
         btn.innerHTML = originalBtnText;
     }
 }
-        document.addEventListener('DOMContentLoaded', fetchHubData);
+        const SIDEBAR_STATE_KEY = 'academiapro.sidebarCollapsed';
 
-     window.showScreen = (screenId) => {
-    document.querySelectorAll('.tool-screen').forEach(s => {
-        s.style.display = 'none';
-        s.classList.remove('active');
-    });
-    const target = document.getElementById(screenId);
-    if (target) {
-        target.style.display = 'block';
-        target.classList.add('active');
-        
-        // This is the "Engine" that runs the briefing
-        if (screenId === 'screen-cards') {
-            window.renderPendingCards();
-            window.renderTodoCards();
-            window.renderVaultCards();
-            if (typeof window.generateAIBriefing === 'function') {
-                window.generateAIBriefing();
+        function setSidebarCollapsed(collapsed) {
+            document.body.classList.toggle('sidebar-collapsed', collapsed);
+            localStorage.setItem(SIDEBAR_STATE_KEY, collapsed ? '1' : '0');
+
+            const toggle = document.getElementById('sidebar-toggle');
+            if (toggle) {
+                toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+                toggle.setAttribute('title', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
             }
         }
-    }
-};
-    
-    // 2. Remove 'active' from all sidebar items
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    
-    // 3. Show the requested screen
-    const target = document.getElementById(screenId);
-    if (target) {
-        target.style.display = 'block';
-        target.classList.add('active');
-    }
-    
-    // 4. Highlight the clicked sidebar item
-    if (event && event.currentTarget) {
-        event.currentTarget.classList.add('active');
-    }
 
+        function initializeAppShell() {
+            const toggle = document.getElementById('sidebar-toggle');
+            const savedState = localStorage.getItem(SIDEBAR_STATE_KEY) === '1';
+            setSidebarCollapsed(savedState);
+
+            toggle?.addEventListener('click', () => {
+                const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+                setSidebarCollapsed(!isCollapsed);
+            });
+
+            const notificationBtn = document.getElementById('notification-btn');
+            const notificationDot = document.getElementById('notification-dot');
+            notificationDot?.classList.add('visible');
+
+            notificationBtn?.addEventListener('click', () => {
+                notificationDot?.classList.remove('visible');
+                if (typeof window.showScreen === 'function') {
+                    window.showScreen('screen-assignments');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const safeInit = (label, fn) => {
+                try {
+                    fn();
+                } catch (error) {
+                    console.error(`${label} init failed:`, error);
+                }
+            };
+
+            const attendanceBtn = document.getElementById('att-add-btn');
+            if (attendanceBtn && attendanceBtn.dataset.bound !== 'true') {
+                attendanceBtn.dataset.bound = 'true';
+                attendanceBtn.addEventListener('click', () => {
+                    if (typeof window.addAttendanceItem === 'function') {
+                        window.addAttendanceItem();
+                    }
+                });
+            }
+
+            // Run non-critical initializers after binding critical interaction handlers.
+            safeInit('fetchHubData', () => fetchHubData());
+            safeInit('initializeAppShell', () => initializeAppShell());
+            safeInit('buildCommandPaletteIndex', () => buildCommandPaletteIndex());
+            safeInit('bindCommandPaletteEvents', () => bindCommandPaletteEvents());
+        });
+
+        const commandItems = [];
+
+        function updateBreadcrumb(screenId) {
+            const nav = document.querySelector(`.nav-item[data-screen="${screenId}"]`);
+            const groupEl = document.getElementById('current-screen-group');
+            const labelEl = document.getElementById('current-screen-label');
+            if (!groupEl || !labelEl) return;
+
+            if (nav) {
+                groupEl.textContent = nav.dataset.group || 'Workspace';
+                labelEl.textContent = nav.dataset.label || 'Dashboard';
+            } else {
+                groupEl.textContent = 'Workspace';
+                labelEl.textContent = 'Dashboard';
+            }
+        }
+
+        /* ==========================================
+           TOAST NOTIFICATION SYSTEM
+           ========================================== */
+        window.showToast = (message, type = 'success', duration = 3000) => {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            container.className = 'toast-container';
+            container.style.position = 'fixed';
+            container.style.top = '20px';
+            container.style.left = '50%';
+            container.style.right = 'auto';
+            container.style.transform = 'translateX(-50%)';
+            container.style.zIndex = '10000';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.alignItems = 'center';
+            container.style.gap = '12px';
+            container.style.width = 'min(92vw, 420px)';
+            container.style.maxWidth = '92vw';
+            container.style.pointerEvents = 'none';
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type} show`;
+            toast.innerHTML = `<div class="toast-icon"></div><div>${escapeHtml(message)}</div>`;
+
+            toast.style.width = '100%';
+            toast.style.pointerEvents = 'auto';
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.classList.add('hide');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        };
+
+        // Skeleton loader helper
+        window.showSkeletonLoader = (elementId, rowCount = 3) => {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.innerHTML = Array(rowCount).fill(`
+                <div class="skeleton-row">
+                    <div class="skeleton-avatar"></div>
+                    <div class="skeleton-content" style="flex: 1;">
+                        <div class="skeleton-text large" style="margin-bottom: 8px;"></div>
+                        <div class="skeleton-text"></div>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        /* ==========================================
+           PROFESSIONAL FORM UX SYSTEM
+           ========================================== */
+
+        // Smart defaults for date/time inputs
+        window.setSmartDefaults = () => {
+            const today = new Date();
+            const todayString = today.toISOString().split('T')[0];
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowString = tomorrow.toISOString().split('T')[0];
+
+            // Set date inputs to today if empty
+            document.querySelectorAll('input[type="date"]:not([value])').forEach(input => {
+                // Only set if empty and not already populated
+                if (!input.value) {
+                    input.value = todayString;
+                    input.dataset.defaultSet = 'true';
+                }
+            });
+
+            // Set time inputs to current hour + 1
+            document.querySelectorAll('input[type="time"]:not([value])').forEach(input => {
+                if (!input.value) {
+                    const nextHour = new Date(today);
+                    nextHour.setHours(nextHour.getHours() + 1, 0);
+                    const hours = String(nextHour.getHours()).padStart(2, '0');
+                    const minutes = String(nextHour.getMinutes()).padStart(2, '0');
+                    input.value = `${hours}:${minutes}`;
+                    input.dataset.defaultSet = 'true';
+                }
+            });
+
+            // Set deadline inputs to tomorrow if they're date fields
+            document.querySelectorAll('input[id*="deadline"], input[id*="due"]').forEach(input => {
+                if (input.type === 'date' && !input.value) {
+                    input.value = tomorrowString;
+                    input.dataset.defaultSet = 'true';
+                }
+            });
+        };
+
+        // Show inline validation message
+        window.showValidation = (fieldId, isValid, message = '') => {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+
+            const container = field.closest('.input-group');
+            if (!container) return;
+
+            // Update container state
+            container.classList.remove('error', 'success', 'warning');
+            if (isValid === true) {
+                container.classList.add('success');
+            } else if (isValid === false) {
+                container.classList.add('error');
+            } else if (isValid === 'warning') {
+                container.classList.add('warning');
+            }
+
+            // Update or create validation message
+            let msgEl = container.querySelector('.validation-message');
+            if (!msgEl) {
+                msgEl = document.createElement('div');
+                msgEl.className = 'validation-message';
+                field.after(msgEl);
+            }
+
+            if (isValid !== null) {
+                msgEl.className = 'validation-message show';
+                if (isValid === true) msgEl.classList.add('success');
+                else if (isValid === false) msgEl.classList.add('error');
+                else if (isValid === 'warning') msgEl.classList.add('warning');
+                msgEl.textContent = message;
+            } else {
+                msgEl.classList.remove('show');
+            }
+        };
+
+        // Real-time field validation
+        window.validateField = (fieldId, rules = {}) => {
+            const field = document.getElementById(fieldId);
+            if (!field) return false;
+
+            const value = field.value.trim();
+            let isValid = true;
+            let message = '';
+
+            // Required validation
+            if (rules.required && !value) {
+                isValid = false;
+                message = rules.requiredMessage || 'This field is required';
+            }
+
+            // Email validation
+            if (rules.email && value && isValid) {
+                const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+                if (!emailRegex.test(value)) {
+                    isValid = false;
+                    message = 'Please enter a valid email address';
+                }
+            }
+
+            // Min length
+            if (rules.minLength && value.length < rules.minLength && isValid) {
+                isValid = false;
+                message = `Minimum ${rules.minLength} characters required`;
+            }
+
+            // Max length
+            if (rules.maxLength && value.length > rules.maxLength && isValid) {
+                isValid = false;
+                message = `Maximum ${rules.maxLength} characters allowed`;
+            }
+
+            // Pattern validation
+            if (rules.pattern && value && isValid) {
+                if (!new RegExp(rules.pattern).test(value)) {
+                    isValid = false;
+                    message = rules.patternMessage || 'Invalid format';
+                }
+            }
+
+            // Custom validation function
+            if (rules.custom && isValid && value) {
+                const result = rules.custom(value);
+                if (result !== true) {
+                    isValid = false;
+                    message = result === false ? 'Invalid input' : result;
+                }
+            }
+
+            window.showValidation(fieldId, isValid ? true : false, message);
+            return isValid;
+        };
+
+        // Initialize floating labels on all input groups
+        window.initFloatingLabels = () => {
+            document.querySelectorAll('.input-group').forEach(group => {
+                const input = group.querySelector('input, textarea, select');
+                const label = group.querySelector('label');
+                if (input && label) {
+                    // Check if already floating
+                    if (!group.classList.contains('floating')) {
+                        // Move label inside input group for floating effect
+                        group.classList.add('floating');
+                    }
+                }
+            });
+        };
+
+        // Set up real-time validation on input
+        window.setupValidation = () => {
+            document.querySelectorAll('input, textarea, select').forEach(field => {
+                if (field.hasAttribute('data-validate')) {
+                    const rules = JSON.parse(field.getAttribute('data-validate') || '{}');
+                    field.addEventListener('blur', () => {
+                        window.validateField(field.id, rules);
+                    });
+                    field.addEventListener('input', () => {
+                        if (field.value.trim()) {
+                            const result = window.validateField(field.id, rules);
+                            if (result) {
+                                field.closest('.input-group')?.classList.add('success');
+                            }
+                        }
+                    });
+                }
+            });
+        };
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            window.initFloatingLabels();
+            window.setSmartDefaults();
+            window.setupValidation();
+        });
+
+        window.showScreen = (screenId) => {
+            document.querySelectorAll('.tool-screen').forEach(screen => {
+                screen.style.display = 'none';
+                screen.classList.remove('active');
+            });
+
+            const target = document.getElementById(screenId);
+            if (target) {
+                target.style.display = 'block';
+                target.classList.add('active');
+            }
+
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            const activeNav = document.querySelector(`.nav-item[data-screen="${screenId}"]`);
+            if (activeNav) {
+                activeNav.classList.add('active');
+            }
+
+            updateBreadcrumb(screenId);
+
+            if (screenId === 'screen-cards') {
+                window.renderPendingCards();
+                window.renderTodoCards();
+                window.renderVaultCards();
+                if (typeof window.generateAIBriefing === 'function') {
+                    window.generateAIBriefing();
+                }
+                if (typeof window.renderDashboardAnalyticsLayer === 'function') {
+                    window.renderDashboardAnalyticsLayer();
+                }
+            }
+
+            if (screenId === 'screen-attendance' && typeof window.loadAttendance === 'function') {
+                window.loadAttendance();
+            }
+
+            if (screenId === 'screen-design-qa' && typeof window.renderComponentChecklist === 'function') {
+                window.renderComponentChecklist();
+            }
+        };
+
+        function buildCommandPaletteIndex() {
+            commandItems.length = 0;
+            document.querySelectorAll('.nav-item[data-screen]').forEach((item) => {
+                commandItems.push({
+                    screenId: item.dataset.screen,
+                    label: item.dataset.label || item.textContent.trim(),
+                    group: item.dataset.group || 'Workspace',
+                    iconClass: item.querySelector('i')?.className || 'fa-solid fa-square'
+                });
+            });
+            renderCommandResults('');
+        }
+
+        function renderCommandResults(query) {
+            const results = document.getElementById('command-results');
+            if (!results) return;
+            const q = (query || '').trim().toLowerCase();
+            const filtered = commandItems.filter(item => {
+                const fullText = `${item.label} ${item.group}`.toLowerCase();
+                return fullText.includes(q);
+            }).slice(0, 20);
+
+            if (!filtered.length) {
+                results.innerHTML = '<div class="command-empty">No matching features found.</div>';
+                return;
+            }
+
+            results.innerHTML = filtered.map(item => `
+                <button class="command-item" type="button" onclick="runCommandPaletteAction('${item.screenId}')">
+                    <div class="command-item-left">
+                        <i class="${item.iconClass}"></i>
+                        <div>
+                            <div class="command-item-title">${item.label}</div>
+                            <div class="command-item-sub">${item.group}</div>
+                        </div>
+                    </div>
+                    <span class="command-item-key">Open</span>
+                </button>
+            `).join('');
+        }
+
+        function parseDashboardItem(raw, category) {
+            const parts = String(raw || '').split('|');
+            if (category === 'schedule') {
+                return {
+                    title: parts[1] || 'Untitled Session',
+                    date: parts[0] || '',
+                    completed: false
+                };
+            }
+
+            return {
+                title: parts[0] || 'Untitled',
+                date: parts[1] || '',
+                completed: parts[2] === 'true'
+            };
+        }
+
+        function loadDashboardSeries() {
+            const assignments = JSON.parse(localStorage.getItem('assignments') || '[]').map(item => parseDashboardItem(item, 'assignments'));
+            const todo = JSON.parse(localStorage.getItem('todo') || '[]').map(item => parseDashboardItem(item, 'todo'));
+            const schedule = JSON.parse(localStorage.getItem('schedule') || '[]').map(item => parseDashboardItem(item, 'schedule'));
+            const attendance = JSON.parse(localStorage.getItem('attendance') || '{}');
+            const focusWeekMinutes = Number(localStorage.getItem('focus-week-minutes') || '0');
+            return { assignments, todo, schedule, attendance, focusWeekMinutes };
+        }
+
+        function safeDate(dateStr) {
+            if (!dateStr || dateStr === 'No date') return null;
+            const d = new Date(dateStr);
+            return Number.isNaN(d.getTime()) ? null : d;
+        }
+
+        function computeCompletionTrend(series) {
+            const now = new Date();
+            const all = [...series.assignments, ...series.todo];
+            const recent = all.filter(item => {
+                const d = safeDate(item.date);
+                if (!d) return false;
+                const diffDays = (now - d) / (1000 * 60 * 60 * 24);
+                return diffDays >= 0 && diffDays <= 7;
+            });
+
+            if (!recent.length) {
+                return { percent: 0, caption: 'No completed tasks in the last 7 days.' };
+            }
+
+            const completed = recent.filter(item => item.completed).length;
+            const percent = Math.round((completed / recent.length) * 100);
+            return { percent, caption: `${completed}/${recent.length} items completed this week.` };
+        }
+
+        function computeAttendanceRisk(series) {
+            const subjects = Object.values(series.attendance || {});
+            if (!subjects.length) {
+                return { count: 0, caption: 'Add attendance subjects to track risk.' };
+            }
+
+            const risky = subjects.filter(subject => Number(subject.percentage || 0) < 75);
+            if (!risky.length) {
+                return { count: 0, caption: 'All subjects are above the 75% goal.' };
+            }
+
+            const weakest = risky.sort((a, b) => Number(a.percentage || 0) - Number(b.percentage || 0))[0];
+            return { count: risky.length, caption: `Lowest: ${weakest.subject || 'Unknown'} at ${weakest.percentage || 0}%.` };
+        }
+
+        function computeUpcomingDeadlines(series) {
+            const now = new Date();
+            const all = [...series.assignments, ...series.todo].filter(item => !item.completed);
+            const upcoming = all
+                .map(item => ({ ...item, dateObj: safeDate(item.date) }))
+                .filter(item => item.dateObj && item.dateObj >= now)
+                .sort((a, b) => a.dateObj - b.dateObj)
+                .slice(0, 5);
+
+            if (!upcoming.length) {
+                return { count: 0, caption: 'No upcoming deadlines in your list.' };
+            }
+
+            const next = upcoming[0];
+            return { count: upcoming.length, caption: `Next: ${next.title} on ${dateLabel(next.date)}.` };
+        }
+
+        function buildWeeklyReview(summary) {
+            const completionText = summary.completion.percent >= 70
+                ? 'Great completion momentum this week.'
+                : 'Completion dipped this week; prioritize top three tasks tomorrow.';
+            const attendanceText = summary.attendance.count > 0
+                ? `${summary.attendance.count} subject${summary.attendance.count > 1 ? 's are' : ' is'} below 75%, so schedule recovery classes.`
+                : 'Attendance is currently in a safe zone.';
+            const deadlineText = summary.deadlines.count > 0
+                ? `You have ${summary.deadlines.count} upcoming deadline${summary.deadlines.count > 1 ? 's' : ''}; tackle the nearest one first.`
+                : 'No upcoming deadlines, so use this window for deep study.';
+            const focusText = summary.focusMinutes >= 180
+                ? `Focused for ${summary.focusMinutes} minutes this week, which is strong consistency.`
+                : `Focused for ${summary.focusMinutes} minutes this week; aim for 180+ minutes next week.`;
+
+            return `${completionText} ${attendanceText} ${deadlineText} ${focusText}`;
+        }
+
+        function applyAnalyticsWidgetOrder() {
+            const grid = document.getElementById('analytics-widget-grid');
+            if (!grid) return;
+
+            const savedOrder = JSON.parse(localStorage.getItem('dashboard-widget-order') || '[]');
+            if (!Array.isArray(savedOrder) || !savedOrder.length) return;
+
+            const nodeMap = new Map();
+            grid.querySelectorAll('.analytics-widget').forEach(node => {
+                nodeMap.set(node.dataset.widgetId, node);
+            });
+
+            savedOrder.forEach(id => {
+                const node = nodeMap.get(id);
+                if (node) grid.appendChild(node);
+            });
+        }
+
+        function persistAnalyticsWidgetOrder() {
+            const grid = document.getElementById('analytics-widget-grid');
+            if (!grid) return;
+            const order = Array.from(grid.querySelectorAll('.analytics-widget')).map(widget => widget.dataset.widgetId);
+            localStorage.setItem('dashboard-widget-order', JSON.stringify(order));
+        }
+
+        function setupAnalyticsWidgetDragDrop() {
+            const grid = document.getElementById('analytics-widget-grid');
+            if (!grid || grid.dataset.dragReady === 'true') return;
+
+            let dragSource = null;
+
+            grid.querySelectorAll('.analytics-widget').forEach(widget => {
+                widget.addEventListener('dragstart', (event) => {
+                    dragSource = widget;
+                    widget.classList.add('dragging');
+                    event.dataTransfer.effectAllowed = 'move';
+                });
+
+                widget.addEventListener('dragend', () => {
+                    widget.classList.remove('dragging');
+                    grid.querySelectorAll('.analytics-widget').forEach(node => node.classList.remove('drag-over'));
+                    dragSource = null;
+                });
+
+                widget.addEventListener('dragover', (event) => {
+                    event.preventDefault();
+                    if (!dragSource || dragSource === widget) return;
+                    widget.classList.add('drag-over');
+                });
+
+                widget.addEventListener('dragleave', () => {
+                    widget.classList.remove('drag-over');
+                });
+
+                widget.addEventListener('drop', (event) => {
+                    event.preventDefault();
+                    widget.classList.remove('drag-over');
+                    if (!dragSource || dragSource === widget) return;
+
+                    const widgets = Array.from(grid.querySelectorAll('.analytics-widget'));
+                    const sourceIndex = widgets.indexOf(dragSource);
+                    const targetIndex = widgets.indexOf(widget);
+
+                    if (sourceIndex < targetIndex) {
+                        grid.insertBefore(dragSource, widget.nextSibling);
+                    } else {
+                        grid.insertBefore(dragSource, widget);
+                    }
+                    persistAnalyticsWidgetOrder();
+                });
+            });
+
+            grid.dataset.dragReady = 'true';
+        }
+
+        window.renderDashboardAnalyticsLayer = () => {
+            const grid = document.getElementById('analytics-widget-grid');
+            if (!grid) return;
+
+            const series = loadDashboardSeries();
+            const completion = computeCompletionTrend(series);
+            const attendance = computeAttendanceRisk(series);
+            const deadlines = computeUpcomingDeadlines(series);
+            const focusMinutes = Number(series.focusWeekMinutes || 0);
+
+            const completionValue = document.getElementById('completion-trend-value');
+            const completionBar = document.getElementById('completion-trend-bar');
+            const completionCaption = document.getElementById('completion-trend-caption');
+            if (completionValue) completionValue.textContent = `${completion.percent}%`;
+            if (completionBar) completionBar.style.width = `${Math.max(0, Math.min(100, completion.percent))}%`;
+            if (completionCaption) completionCaption.textContent = completion.caption;
+
+            const attendanceValue = document.getElementById('attendance-risk-value');
+            const attendanceCaption = document.getElementById('attendance-risk-caption');
+            if (attendanceValue) attendanceValue.textContent = `${attendance.count} at risk`;
+            if (attendanceCaption) attendanceCaption.textContent = attendance.caption;
+
+            const deadlinesValue = document.getElementById('upcoming-deadlines-value');
+            const deadlinesCaption = document.getElementById('upcoming-deadlines-caption');
+            if (deadlinesValue) deadlinesValue.textContent = `${deadlines.count} due`;
+            if (deadlinesCaption) deadlinesCaption.textContent = deadlines.caption;
+
+            const focusValue = document.getElementById('focus-time-value');
+            const focusCaption = document.getElementById('focus-time-caption');
+            if (focusValue) focusValue.textContent = `${focusMinutes} min`;
+            if (focusCaption) focusCaption.textContent = focusMinutes >= 180 ? 'Strong consistency this week.' : 'Increase deep-work blocks for better gains.';
+
+            const weeklyText = document.getElementById('weekly-review-text');
+            if (weeklyText) {
+                weeklyText.textContent = buildWeeklyReview({ completion, attendance, deadlines, focusMinutes });
+            }
+
+            applyAnalyticsWidgetOrder();
+            setupAnalyticsWidgetDragDrop();
+        };
+
+        window.trackFocusMinutes = (minutes) => {
+            const safeMinutes = Number(minutes || 0);
+            if (!safeMinutes || safeMinutes < 0) return;
+            const current = Number(localStorage.getItem('focus-week-minutes') || '0');
+            localStorage.setItem('focus-week-minutes', String(current + safeMinutes));
+            if (typeof window.renderDashboardAnalyticsLayer === 'function') {
+                window.renderDashboardAnalyticsLayer();
+            }
+        };
+
+        window.openCommandPalette = () => {
+            const palette = document.getElementById('command-palette');
+            const input = document.getElementById('command-input');
+            if (!palette || !input) return;
+            palette.classList.add('active');
+            palette.setAttribute('aria-hidden', 'false');
+            input.value = '';
+            renderCommandResults('');
+            setTimeout(() => input.focus(), 20);
+        };
+
+        window.closeCommandPalette = () => {
+            const palette = document.getElementById('command-palette');
+            if (!palette) return;
+            palette.classList.remove('active');
+            palette.setAttribute('aria-hidden', 'true');
+        };
+
+        window.runCommandPaletteAction = (screenId) => {
+            closeCommandPalette();
+            showScreen(screenId);
+        };
+
+        function bindCommandPaletteEvents() {
+            const trigger = document.getElementById('open-command-palette');
+            const input = document.getElementById('command-input');
+
+            trigger?.addEventListener('click', openCommandPalette);
+            input?.addEventListener('input', (e) => renderCommandResults(e.target.value));
+            input?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const first = document.querySelector('.command-item');
+                    if (first) first.click();
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                const tag = (document.activeElement?.tagName || '').toLowerCase();
+                const isTypingField = ['input', 'textarea', 'select'].includes(tag);
+
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    openCommandPalette();
+                }
+
+                if (e.key === 'Escape') {
+                    closeCommandPalette();
+                }
+
+                if (isTypingField && !(e.ctrlKey || e.metaKey)) return;
+            });
+        }
+
+
+        const HUB_VIEW_STATE_KEY = 'academiapro.hubViewState';
+        const HUB_COMPLETION_KEY = 'academiapro.hubCompletion';
+        const hubDataCache = { schedule: [], assignments: [], todo: [] };
+        const defaultHubViewState = {
+            schedule: { view: 'list', filter: 'today' },
+            assignments: { view: 'list', filter: 'today' },
+            todo: { view: 'list', filter: 'today' }
+        };
+
+        const hubViewState = (() => {
+            try {
+                const saved = JSON.parse(localStorage.getItem(HUB_VIEW_STATE_KEY) || '{}');
+                return {
+                    schedule: { ...defaultHubViewState.schedule, ...(saved.schedule || {}) },
+                    assignments: { ...defaultHubViewState.assignments, ...(saved.assignments || {}) },
+                    todo: { ...defaultHubViewState.todo, ...(saved.todo || {}) }
+                };
+            } catch {
+                return { ...defaultHubViewState };
+            }
+        })();
+
+        function saveHubViewState() {
+            localStorage.setItem(HUB_VIEW_STATE_KEY, JSON.stringify(hubViewState));
+        }
+
+        function getCompletionMap() {
+            try {
+                return JSON.parse(localStorage.getItem(HUB_COMPLETION_KEY) || '{}');
+            } catch {
+                return {};
+            }
+        }
+
+        function saveCompletionMap(map) {
+            localStorage.setItem(HUB_COMPLETION_KEY, JSON.stringify(map));
+        }
+
+        function getCompletionKey(category, rawItem) {
+            return `${category}::${rawItem}`;
+        }
+
+        function isItemCompleted(category, rawItem, explicitCompleted = false) {
+            if (explicitCompleted) return true;
+            const map = getCompletionMap();
+            return !!map[getCompletionKey(category, rawItem)];
+        }
+
+        function toggleItemCompleted(category, index) {
+            const items = hubDataCache[category] || [];
+            const raw = items[index];
+            if (!raw) return;
+            const map = getCompletionMap();
+            const key = getCompletionKey(category, raw);
+            map[key] = !map[key];
+            saveCompletionMap(map);
+            renderProDataViews(category, items);
+        }
+
+        window.toggleItemCompleted = toggleItemCompleted;
+
+        function parseDateSafe(dateValue) {
+            if (!dateValue) return null;
+            const d = new Date(dateValue);
+            if (Number.isNaN(d.getTime())) return null;
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+
+        function dateLabel(dateValue) {
+            const d = parseDateSafe(dateValue);
+            return d ? d.toLocaleDateString() : 'No date';
+        }
+
+        function hasAnySelector(selectors) {
+            return selectors.some((selector) => !!document.querySelector(selector));
+        }
+
+        function stateBadgeMarkup(state, ok) {
+            const label = ok ? 'Ready' : 'Missing';
+            const statusClass = ok ? 'ok' : 'missing';
+            return `<span class="state-chip state-${state} ${statusClass}">${label}</span>`;
+        }
+
+        function featureCoverageRow(feature) {
+            const states = {
+                empty: hasAnySelector(feature.emptySelectors || []),
+                loading: hasAnySelector(feature.loadingSelectors || []),
+                error: hasAnySelector(feature.errorSelectors || []),
+                success: hasAnySelector(feature.successSelectors || [])
+            };
+
+            const passed = Object.values(states).filter(Boolean).length;
+            const coverage = Math.round((passed / 4) * 100);
+
+            return {
+                name: feature.name,
+                states,
+                coverage
+            };
+        }
+
+        window.renderComponentChecklist = () => {
+            const body = document.getElementById('component-checklist-body');
+            if (!body) return;
+
+            const features = [
+                {
+                    name: 'Dashboard',
+                    emptySelectors: ['.dashboard-list-empty'],
+                    loadingSelectors: ['.loading', '.analytics-widget .analytics-value'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.dashboard-action-btn.success', '.validation-message.success', '.state-success']
+                },
+                {
+                    name: 'Class Schedule',
+                    emptySelectors: ['#schedule-list .pro-empty', '.pro-empty-cell'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.validation-message.success', '.state-success']
+                },
+                {
+                    name: 'To-Do List',
+                    emptySelectors: ['#todo-list .pro-empty', '#todo-cards-list .dashboard-list-empty'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.validation-message.success', '.state-success']
+                },
+                {
+                    name: 'Assignments',
+                    emptySelectors: ['#assignment-list .pro-empty', '#pending-cards-list .dashboard-list-empty'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.validation-message.success', '.state-success']
+                },
+                {
+                    name: 'Study Planner',
+                    emptySelectors: ['#study-task-list .pro-empty', '.study-table-wrap .pro-empty'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.validation-message.success', '.state-success']
+                },
+                {
+                    name: 'Focus Timer',
+                    emptySelectors: ['#focus-timer-display'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.focus-start-btn', '.state-success']
+                },
+                {
+                    name: 'Attendance Calc',
+                    emptySelectors: ['#attendance-tbody .pro-empty', '.dashboard-list-empty'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.attendance-required.shortage', '.state-error'],
+                    successSelectors: ['.attendance-status-pill.safe', '.state-success']
+                },
+                {
+                    name: 'Student Vault',
+                    emptySelectors: ['#tbody-vault .pro-empty', '#vault-cards-list .dashboard-list-empty'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.vault-download-link', '.state-success']
+                },
+                {
+                    name: 'AI Workspace',
+                    emptySelectors: ['#ai-chat-box'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.chat-bubble.ai-msg', '.state-success']
+                },
+                {
+                    name: 'Document Tools',
+                    emptySelectors: ['.preview-box', '.upload-area'],
+                    loadingSelectors: ['.loading'],
+                    errorSelectors: ['.validation-message.error', '.state-error'],
+                    successSelectors: ['.hub-list table', '.state-success']
+                }
+            ];
+
+            const rows = features.map(featureCoverageRow);
+
+            body.innerHTML = rows.map((row) => `
+                <tr>
+                    <td class="design-qa-feature">${row.name}</td>
+                    <td>${stateBadgeMarkup('empty', row.states.empty)}</td>
+                    <td>${stateBadgeMarkup('loading', row.states.loading)}</td>
+                    <td>${stateBadgeMarkup('error', row.states.error)}</td>
+                    <td>${stateBadgeMarkup('success', row.states.success)}</td>
+                    <td>
+                        <div class="coverage-cell">
+                            <span>${row.coverage}%</span>
+                            <div class="coverage-track"><div class="coverage-fill" style="width:${row.coverage}%"></div></div>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        };
+
+        function getStartOfWeek(date) {
+            const d = new Date(date);
+            const day = d.getDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            d.setDate(d.getDate() + diff);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+
+        function getEndOfWeek(date) {
+            const start = getStartOfWeek(date);
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            end.setHours(23, 59, 59, 999);
+            return end;
+        }
+
+        function getItemStatus(item) {
+            if (item.completed) return 'completed';
+            if (item.dateObj && item.dateObj < item.today) return 'overdue';
+            return 'planned';
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function parseHubItems(category, items) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            return (items || []).map((raw, index) => {
+                const parts = String(raw || '').split('|');
+
+                if (category === 'schedule') {
+                    const dateObj = parseDateSafe(parts[0]);
+                    return {
+                        category,
+                        index,
+                        raw,
+                        title: parts[1] || 'Untitled Session',
+                        date: parts[0] || '',
+                        time: parts[2] || '',
+                        completed: isItemCompleted(category, raw),
+                        dateObj,
+                        today
+                    };
+                }
+
+                if (category === 'assignments') {
+                    const dateObj = parseDateSafe(parts[1]);
+                    const explicitCompleted = parts[2] === 'true';
+                    return {
+                        category,
+                        index,
+                        raw,
+                        title: parts[0] || 'Untitled Assignment',
+                        date: parts[1] || '',
+                        time: '',
+                        completed: isItemCompleted(category, raw, explicitCompleted),
+                        dateObj,
+                        today
+                    };
+                }
+
+                const dateObj = parseDateSafe(parts[1]);
+                const explicitCompleted = parts[2] === 'true';
+                return {
+                    category,
+                    index,
+                    raw,
+                    title: parts[0] || 'Untitled Task',
+                    date: parts[1] || '',
+                    time: '',
+                    completed: isItemCompleted(category, raw, explicitCompleted),
+                    dateObj,
+                    today
+                };
+            });
+        }
+
+        function filterItemsByChip(items, filterName) {
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            const weekStart = getStartOfWeek(now);
+            const weekEnd = getEndOfWeek(now);
+
+            return items.filter(item => {
+                if (filterName === 'completed') {
+                    return item.completed;
+                }
+
+                if (!item.dateObj) {
+                    return false;
+                }
+
+                if (filterName === 'today') {
+                    return item.dateObj.getTime() === now.getTime();
+                }
+
+                if (filterName === 'thisWeek') {
+                    return item.dateObj >= weekStart && item.dateObj <= weekEnd;
+                }
+
+                if (filterName === 'overdue') {
+                    return item.dateObj < now && !item.completed;
+                }
+
+                return true;
+            });
+        }
+
+        function renderListTable(category, items) {
+            const tbodyMap = {
+                schedule: document.getElementById('tbody-schedule'),
+                assignments: document.getElementById('tbody-assignments'),
+                todo: document.getElementById('tbody-todo')
+            };
+
+            const tbody = tbodyMap[category];
+            if (!tbody) return;
+
+            if (!items.length) {
+                tbody.innerHTML = `<tr class="pro-row"><td colspan="5" class="pro-empty-cell"><div class="pro-empty">No items for this filter.</div></td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => {
+                const status = getItemStatus(item);
+                const statusClass = status === 'completed' ? 'completed' : (status === 'overdue' ? 'overdue' : '');
+                const statusLabel = status === 'completed' ? 'Completed' : (status === 'overdue' ? 'Overdue' : 'Planned');
+                const completeLabel = item.completed ? 'Undo' : 'Complete';
+
+                if (category === 'schedule') {
+                    return `<tr class="pro-row"><td>${escapeHtml(dateLabel(item.date))}</td><td class="pro-cell-title">${escapeHtml(item.title)}</td><td class="pro-cell-muted">${escapeHtml(item.time || '-')}</td><td><span class="pro-status-pill ${statusClass}">${statusLabel}</span></td><td class="ta-right"><span class="pro-item-actions"><button type="button" class="pro-action-btn complete" onclick="toggleItemCompleted('schedule', ${item.index})">${completeLabel}</button><button type="button" class="pro-action-btn" onclick="deleteItem('schedule', ${item.index})"><i class="fa-solid fa-trash"></i></button></span></td></tr>`;
+                }
+
+                return `<tr class="pro-row"><td class="pro-cell-title">${escapeHtml(item.title)}</td><td class="pro-cell-muted">${escapeHtml(dateLabel(item.date))}</td><td><span class="pro-status-pill ${statusClass}">${statusLabel}</span></td><td class="ta-right"><span class="pro-item-actions"><button type="button" class="pro-action-btn complete" onclick="toggleItemCompleted('${category}', ${item.index})">${completeLabel}</button><button type="button" class="pro-action-btn" onclick="deleteItem('${category}', ${item.index})"><i class="fa-solid fa-trash"></i></button></span></td></tr>`;
+            }).join('');
+        }
+
+        function renderCalendarView(category, items) {
+            const container = document.getElementById(`${category}-view-calendar`);
+            if (!container) return;
+
+            const grouped = new Map();
+            items.forEach(item => {
+                const key = item.date ? item.date : 'No date';
+                if (!grouped.has(key)) grouped.set(key, []);
+                grouped.get(key).push(item);
+            });
+
+            const entries = Array.from(grouped.entries()).sort((a, b) => {
+                if (a[0] === 'No date') return 1;
+                if (b[0] === 'No date') return -1;
+                return new Date(a[0]) - new Date(b[0]);
+            });
+
+            if (!entries.length) {
+                container.innerHTML = '<div class="pro-empty">No calendar items for this filter.</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+
+            entries.forEach(([dateKey, dayItems]) => {
+                const dayCard = document.createElement('div');
+                dayCard.className = 'calendar-day-card';
+                dayCard.dataset.date = dateKey;
+
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'calendar-day-title';
+                titleDiv.textContent = dateLabel(dateKey);
+
+                dayCard.appendChild(titleDiv);
+
+                dayItems.forEach(item => {
+                    const colorClass = getColorForCategoryOrTitle(category, item.title || '');
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = `calendar-item ${colorClass}`;
+                    itemDiv.draggable = true;
+                    itemDiv.dataset.itemIndex = item.index;
+                    itemDiv.dataset.category = category;
+                    itemDiv.dataset.originalDate = dateKey;
+
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'calendar-item-content';
+                    contentDiv.innerHTML = `<div class="pro-item-title">${escapeHtml(item.title)}</div><div class="pro-item-meta">${escapeHtml(item.time || 'No time')}</div>`;
+
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'calendar-item-actions';
+
+                    const reminderBtn = document.createElement('button');
+                    reminderBtn.type = 'button';
+                    reminderBtn.className = 'reminder-btn';
+                    reminderBtn.innerHTML = '<i class="fa-solid fa-bell"></i>';
+                    reminderBtn.title = 'Set reminder';
+                    reminderBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        showReminderDropdown(item, reminderBtn);
+                    };
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.type = 'button';
+                    deleteBtn.className = 'pro-action-btn';
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteItem(category, item.index);
+                    };
+                    deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+
+                    actionsDiv.appendChild(reminderBtn);
+                    actionsDiv.appendChild(deleteBtn);
+
+                    itemDiv.appendChild(contentDiv);
+                    itemDiv.appendChild(actionsDiv);
+
+                    // Drag event handlers
+                    itemDiv.addEventListener('dragstart', handleDragStart);
+                    itemDiv.addEventListener('dragend', handleDragEnd);
+
+                    dayCard.appendChild(itemDiv);
+                });
+
+                // Drop zone handlers for day card
+                dayCard.addEventListener('dragover', handleDragOver);
+                dayCard.addEventListener('drop', function(e) {
+                    handleDropCalendarItem.call(this, e, category);
+                });
+                dayCard.addEventListener('dragleave', handleDragLeave);
+
+                container.appendChild(dayCard);
+            });
+        }
+
+        function getColorForCategoryOrTitle(category, titleOrSubject) {
+            const subjectMap = {
+                'math': 'cat-math',
+                'maths': 'cat-math',
+                'arithmetic': 'cat-math',
+                'physics': 'cat-physics',
+                'chemistry': 'cat-chemistry',
+                'biology': 'cat-biology',
+                'english': 'cat-language',
+                'language': 'cat-language',
+                'spanish': 'cat-language',
+                'french': 'cat-language',
+                'german': 'cat-language',
+                'history': 'cat-history',
+                'social': 'cat-history',
+                'studies': 'cat-history',
+                'art': 'cat-art',
+                'design': 'cat-art',
+                'music': 'cat-art',
+                'pe': 'cat-pe',
+                'physical': 'cat-pe',
+                'sports': 'cat-pe',
+                'exercise': 'cat-pe'
+            };
+
+            // Map category to color
+            const categoryColorMap = {
+                'schedule': 'cat-math',
+                'assignments': 'cat-physics',
+                'todo': 'cat-chemistry'
+            };
+
+            // First try to match based on title
+            const normalized = titleOrSubject.toLowerCase().trim();
+            for (const [key, val] of Object.entries(subjectMap)) {
+                if (normalized.includes(key)) return val;
+            }
+
+            // Fall back to category-based color
+            return categoryColorMap[category] || 'cat-math';
+        }
+
+        let draggedItem = null;
+
+        function handleDragStart(e) {
+            draggedItem = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+        }
+
+        function handleDragEnd(e) {
+            draggedItem = null;
+            this.classList.remove('dragging');
+            document.querySelectorAll('.calendar-day-card.drag-over').forEach(card => {
+                card.classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (draggedItem && draggedItem !== this) {
+                this.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            if (e.target === this) {
+                this.classList.remove('drag-over');
+            }
+        }
+
+        function handleDropCalendarItem(e, category) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            this.classList.remove('drag-over');
+
+            if (!draggedItem) return;
+
+            const itemIndex = parseInt(draggedItem.dataset.itemIndex);
+            const newDate = this.dataset.date;
+            const itemCategory = draggedItem.dataset.category;
+
+            if (itemCategory === category && itemIndex !== undefined) {
+                const items = JSON.parse(localStorage.getItem(category) || '[]');
+                if (items[itemIndex]) {
+                    items[itemIndex].date = newDate;
+                    localStorage.setItem(category, JSON.stringify(items));
+                    
+                    // Update hub data cache and re-render
+                    if (hubDataCache[category]) {
+                        hubDataCache[category][itemIndex] = items[itemIndex];
+                        renderProDataViews(category, hubDataCache[category]);
+                    }
+                    
+                    window.showToast(`Rescheduled to ${dateLabel(newDate)}`, 'success', 2000);
+                }
+            }
+        }
+
+        function showReminderDropdown(item, button) {
+            // Remove existing dropdown
+            const existing = document.querySelector('.reminder-dropdown');
+            if (existing) existing.remove();
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'reminder-dropdown';
+
+            const reminders = [
+                { value: 900, label: '15 minutes before' },
+                { value: 3600, label: '1 hour before' },
+                { value: 86400, label: '1 day before' },
+                { value: null, label: 'No reminder' }
+            ];
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'reminder-dropdown-content';
+
+            const savedReminder = localStorage.getItem(`reminder-${item.index}`) || 'none';
+
+            reminders.forEach(reminder => {
+                const option = document.createElement('div');
+                option.className = 'reminder-option';
+                if ((reminder.value === null && savedReminder === 'none') || 
+                    (reminder.value !== null && savedReminder === reminder.value.toString())) {
+                    option.classList.add('active');
+                }
+
+                option.textContent = reminder.label;
+                option.onclick = () => {
+                    setReminder(item, reminder.value);
+                    dropdown.remove();
+                    window.showToast(`Reminder set: ${reminder.label}`, 'success', 2000);
+                };
+
+                contentDiv.appendChild(option);
+            });
+
+            dropdown.appendChild(contentDiv);
+            document.body.appendChild(dropdown);
+
+            const rect = button.getBoundingClientRect();
+            dropdown.style.position = 'fixed';
+            dropdown.style.top = (rect.bottom + 8) + 'px';
+            dropdown.style.left = (rect.left - 200 + rect.width) + 'px';
+
+            setTimeout(() => {
+                document.addEventListener('click', closeDropdown);
+            }, 10);
+        }
+
+        function closeDropdown(e) {
+            const dropdown = document.querySelector('.reminder-dropdown');
+            if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.reminder-btn')) {
+                dropdown.remove();
+                document.removeEventListener('click', closeDropdown);
+            }
+        }
+
+        function setReminder(item, reminderSeconds) {
+            const key = `reminder-${item.index}`;
+            if (reminderSeconds === null) {
+                localStorage.removeItem(key);
+                localStorage.removeItem(`reminder-notified-${item.index}`);
+            } else {
+                localStorage.setItem(key, reminderSeconds.toString());
+            }
+            checkReminders();
+        }
+
+        let remindersInitialized = false;
+
+        function checkReminders() {
+            if (remindersInitialized) return;
+            remindersInitialized = true;
+
+            setInterval(() => {
+                const categories = ['schedule', 'assignments', 'todo'];
+                categories.forEach(category => {
+                    const items = JSON.parse(localStorage.getItem(category) || '[]');
+                    items.forEach((item, index) => {
+                        const reminderValue = localStorage.getItem(`reminder-${index}`);
+                        const alreadyNotified = localStorage.getItem(`reminder-notified-${index}`);
+
+                        if (reminderValue && !alreadyNotified) {
+                            const reminderSeconds = parseInt(reminderValue);
+                            const itemDate = new Date(item.date);
+                            const reminderTime = new Date(itemDate.getTime() - (reminderSeconds * 1000));
+                            const now = new Date();
+
+                            if (now >= reminderTime && now < new Date(reminderTime.getTime() + 60000)) {
+                                if ('Notification' in window && Notification.permission === 'granted') {
+                                    new Notification(`Reminder: ${item.title}`, {
+                                        body: `Your ${category} "${item.title}" is coming up!`,
+                                        icon: '/static/icon.png'
+                                    });
+                                }
+                                localStorage.setItem(`reminder-notified-${index}`, 'true');
+                            }
+                        }
+                    });
+                });
+            }, 60000);
+        }
+
+        // Request notification permission on load
+        window.addEventListener('DOMContentLoaded', () => {
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+            checkReminders();
+        });
+
+        
+
+        function renderBoardView(category, items) {
+            const container = document.getElementById(`${category}-view-board`);
+            if (!container) return;
+
+            const columns = {
+                overdue: [],
+                planned: [],
+                completed: []
+            };
+
+            items.forEach(item => {
+                columns[getItemStatus(item)].push(item);
+            });
+
+            const labels = {
+                overdue: 'Overdue',
+                planned: 'Planned',
+                completed: 'Completed'
+            };
+
+            container.innerHTML = Object.keys(columns).map(col => {
+                const cards = columns[col].length
+                    ? columns[col].map(item => `<div class="board-item"><div class="pro-item-title">${escapeHtml(item.title)}</div><div class="pro-item-meta">${escapeHtml(dateLabel(item.date))}${item.time ? ` • ${escapeHtml(item.time)}` : ''}</div><div class="pro-item-footer"><span class="pro-item-actions"><button type="button" class="pro-action-btn complete" onclick="toggleItemCompleted('${category}', ${item.index})">${item.completed ? 'Undo' : 'Complete'}</button><button type="button" class="pro-action-btn" onclick="deleteItem('${category}', ${item.index})"><i class="fa-solid fa-trash"></i></button></span></div></div>`).join('')
+                    : '<div class="pro-empty">No items</div>';
+
+                return `<div class="board-column"><h4>${labels[col]}</h4>${cards}</div>`;
+            }).join('');
+        }
+
+        function syncViewControls(category) {
+            const state = hubViewState[category] || defaultHubViewState[category];
+            const controls = document.getElementById(`${category}-controls`);
+            const screen = document.getElementById(`screen-${category}`);
+            if (!controls || !screen) return;
+
+            controls.querySelectorAll('.view-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.view === state.view);
+            });
+
+            controls.querySelectorAll('.filter-chip').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === state.filter);
+            });
+
+            screen.querySelectorAll('.pro-data-view').forEach(view => {
+                view.classList.remove('active');
+            });
+            const active = document.getElementById(`${category}-view-${state.view}`);
+            active?.classList.add('active');
+        }
+
+        function renderProDataViews(category, rawItems) {
+            const state = hubViewState[category] || defaultHubViewState[category];
+            const parsed = parseHubItems(category, rawItems || []);
+            const filtered = filterItemsByChip(parsed, state.filter);
+
+            syncViewControls(category);
+            renderListTable(category, filtered);
+            renderCalendarView(category, filtered);
+            renderBoardView(category, filtered);
+        }
+
+        window.setDataView = (category, viewName) => {
+            if (!hubViewState[category]) return;
+            hubViewState[category].view = viewName;
+            saveHubViewState();
+            renderProDataViews(category, hubDataCache[category] || []);
+        };
+
+        window.setDataFilter = (category, filterName) => {
+            if (!hubViewState[category]) return;
+            hubViewState[category].filter = filterName;
+            saveHubViewState();
+            renderProDataViews(category, hubDataCache[category] || []);
+        };
 
         function fetchHubData() {
             fetch('/get-student-info')
                 .then(res => res.json())
                 .then(data => {
+                    hubDataCache.schedule = data.schedule || [];
+                    hubDataCache.todo = data.todo || [];
+                    hubDataCache.assignments = data.assignments || [];
+
                     renderHubList('vault', data.vault || []);
-                    renderHubList('schedule', data.schedule);
-                    renderHubList('todo', data.todo);
-                    renderHubList('assignments', data.assignments);
-                    renderHubList('study', data.study);
+                    renderHubList('schedule', hubDataCache.schedule);
+                    renderHubList('todo', hubDataCache.todo);
+                    renderHubList('assignments', hubDataCache.assignments);
+                    renderHubList('study', data.study || []);
+
+                    if (typeof window.renderPendingCards === 'function') {
+                        window.renderPendingCards();
+                    }
                 });
         }
 
         function renderHubList(category, items) {
             const list = document.getElementById(`list-${category}`);
-            const tbodySch = document.getElementById('tbody-schedule');
-            const tbodyAsn = document.getElementById('tbody-assignments');
             const tbodyVault = document.getElementById('tbody-vault');
             const tbodyStudy = document.getElementById('study-tasks-body');
+
+            if (category === 'schedule' || category === 'assignments' || category === 'todo') {
+                renderProDataViews(category, items || []);
+                return;
+            }
 
             if (category === 'vault' && tbodyVault) {
                 tbodyVault.innerHTML = items.map((item, index) => {
                     const parts = item.split('|');
                     const date = new Date(parseInt(parts[3]) * 1000).toLocaleDateString();
-                    return `<tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: 600;">${parts[0]}</td><td style="padding: 10px;"><span style="background:#eef2ff; color:#6366f1; padding:2px 8px; border-radius:4px; font-size:0.8rem;">${parts[1]}</span></td><td style="padding: 10px; color: #64748b;">${date}</td><td style="padding: 10px; text-align: right; display: flex; gap: 10px; justify-content: flex-end;"><a href="/download-vault/${index}" style="color: #059669;"><i class="fa-solid fa-download"></i></a><i class="fa-solid fa-trash" style="cursor:pointer; color:#94a3b8;" onclick="deleteItem('vault', ${index})"></i></td></tr>`;
-                }).join('');
-            } else if (category === 'schedule' && tbodySch) {
-                tbodySch.innerHTML = items.map((item, index) => {
-                    const parts = item.split('|');
-                    return `<tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px;">${parts[0]}</td><td style="padding: 10px; font-weight: 600;">${parts[1]}</td><td style="padding: 10px; color: #64748b;">${parts[2]}</td><td style="padding: 10px; text-align: right;"><i class="fa-solid fa-trash" style="cursor:pointer; color:#94a3b8;" onclick="deleteItem('schedule', ${index})"></i></td></tr>`;
-                }).join('');
-            } else if (category === 'assignments' && tbodyAsn) {
-                tbodyAsn.innerHTML = items.map((item, index) => {
-                    const parts = item.split('|');
-                    return `<tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 10px; font-weight: 600;">${parts[0]}</td><td style="padding: 10px; color: #df481a;">${parts[1]}</td><td style="padding: 10px; text-align: right;"><i class="fa-solid fa-trash" style="cursor:pointer; color:#94a3b8;" onclick="deleteItem('assignments', ${index})"></i></td></tr>`;
+                    return `<tr class="pro-row"><td class="pro-cell-title">${parts[0]}</td><td><span class="vault-cat-pill">${parts[1]}</span></td><td class="pro-cell-muted">${date}</td><td class="ta-right"><div class="vault-actions"><a href="/download-vault/${index}" class="vault-download-link"><i class="fa-solid fa-download"></i></a><i class="fa-solid fa-trash vault-delete-btn" onclick="deleteItem('vault', ${index})"></i></div></td></tr>`;
                 }).join('');
             } else if (category === 'study' && tbodyStudy) {
                 tbodyStudy.innerHTML = items.filter(i => i.includes('|')).map((item, index) => {
                     const parts = item.split('|');
-                    return `<tr style="border-bottom: 1px solid #f1f5f9; font-size: 13px;"><td style="text-align: center;"><input type="checkbox" ${parts[2] === 'true' ? 'checked' : ''}></td><td style="padding: 10px;">${parts[0]}</td><td style="padding: 10px; color: #64748b;">${parts[1]}</td><td style="text-align: center;"><i class="fa-solid fa-trash" style="color:#cbd5e1; cursor:pointer;" onclick="deleteItem('study', ${index})"></i></td></tr>`;
+                    return `<tr class="pro-row"><td class="ta-center"><input type="checkbox" ${parts[2] === 'true' ? 'checked' : ''}></td><td>${parts[0]}</td><td class="pro-cell-muted">${parts[1]}</td><td class="ta-center"><i class="fa-solid fa-trash vault-delete-btn" onclick="deleteItem('study', ${index})"></i></td></tr>`;
                 }).join('');
             } else if (list) {
                 list.innerHTML = items.map((item, index) => `<div class="hub-item"><span>${item}</span><i class="fa-solid fa-trash" onclick="deleteItem('${category}', ${index})"></i></div>`).join('');
@@ -2905,20 +4125,33 @@ async function startFreshConversion() {
             const day = document.getElementById('sch-day'), title = document.getElementById('sch-title'), time = document.getElementById('sch-time');
             if (!day.value || !title.value || !time.value) return;
             const content = `${day.value}|${title.value}|${time.value}`;
-            addItemDirect('schedule', content).then(() => { day.value = ''; title.value = ''; time.value = ''; fetchHubData(); });
+            addItemDirect('schedule', content).then(() => { day.value = ''; title.value = ''; time.value = ''; fetchHubData(); window.showToast('Schedule added!', 'success'); });
         }
 
         function addAssignmentTableItem() {
             const title = document.getElementById('asn-title'), deadline = document.getElementById('asn-deadline');
             if (!title.value || !deadline.value) return;
             const content = `${title.value}|${deadline.value}`;
-            addItemDirect('assignments', content).then(() => { title.value = ''; deadline.value = ''; fetchHubData(); });
+            addItemDirect('assignments', content).then(() => { title.value = ''; deadline.value = ''; fetchHubData(); window.showToast('Assignment added!', 'success'); });
+        }
+
+        function addTodoItem() {
+            const title = document.getElementById('input-todo');
+            const due = document.getElementById('todo-deadline');
+            if (!title.value.trim()) return;
+            const content = `${title.value.trim()}|${due.value || ''}|false`;
+            addItemDirect('todo', content).then(() => {
+                title.value = '';
+                due.value = '';
+                fetchHubData();
+                window.showToast('Task added!', 'success');
+            });
         }
 
         function addStudyTask() {
             const task = document.getElementById('new-task-name'), time = document.getElementById('new-task-time');
             if (!task.value) return;
-            addItemDirect('study', `${task.value}|${time.value}|false`).then(() => { task.value = ''; time.value = ''; fetchHubData(); });
+            addItemDirect('study', `${task.value}|${time.value}|false`).then(() => { task.value = ''; time.value = ''; fetchHubData(); window.showToast('Study task added!', 'success'); });
         }
 
         function addItem(category, inputId) {
@@ -2940,7 +4173,10 @@ async function startFreshConversion() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ category: category, index: index })
-            }).then(fetchHubData);
+            }).then(res => {
+                fetchHubData();
+                window.showToast('Item deleted!', 'success');
+            });
         }
 
         function handlePreview(input, containerId) {
@@ -3028,36 +4264,45 @@ document.addEventListener('keydown', function(event) {
     }
 });
 // --- PDF TO PPT LOGIC ---
-document.getElementById('pdf-ppt-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const status = document.getElementById('ppt-status');
-    const formData = new FormData(this);
+const pdfPptForm = document.getElementById('pdf-ppt-form');
+if (pdfPptForm) {
+    pdfPptForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const status = document.getElementById('ppt-status');
+        const formData = new FormData(this);
 
-    status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Converting... please wait.';
+        if (status) {
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Converting... please wait.';
+        }
 
-    fetch('/pdf-to-ppt', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        if (response.ok) return response.blob();
-        throw new Error('Conversion failed');
-    })
-    .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = "AcademiaPro_Slides.pptx";
-        document.body.appendChild(a);
-        a.click();    
-        a.remove();
-        status.innerHTML = '<span style="color: #059669;"><i class="fa-solid fa-check"></i> Conversion Complete!</span>';
-    })
-    .catch(err => {
-        status.innerHTML = '<span style="color: #ef4444;">Error: Could not convert file.</span>';
-        console.error(err);
+        fetch('/pdf-to-ppt', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) return response.blob();
+            throw new Error('Conversion failed');
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "AcademiaPro_Slides.pptx";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            if (status) {
+                status.innerHTML = '<span style="color: #059669;"><i class="fa-solid fa-check"></i> Conversion Complete!</span>';
+            }
+        })
+        .catch(err => {
+            if (status) {
+                status.innerHTML = '<span style="color: #ef4444;">Error: Could not convert file.</span>';
+            }
+            console.error(err);
+        });
     });
-});
+}
 function updateDynamicCalendarIcon() {
     const now = new Date();
     const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -3101,7 +4346,7 @@ updateDynamicCalendarIcon();
 window.loadNoteForDate = async () => {
     const date = document.getElementById('cal-date').value;
     const display = document.getElementById('saved-note-display');
-    const user = auth.currentUser;
+    const user = getCurrentUser();
 
     if (!user || !date) return;
 

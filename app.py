@@ -585,7 +585,7 @@ def ai_lab_chat():
         file_content = ""
         try:
             if filename.lower().endswith('.pdf'):
-                # Extract text from PDF
+                # Extract text from PDFī
                 try:
                     pdf_document = fitz.open(file_path)
                     for page_num in range(len(pdf_document)):
@@ -723,6 +723,9 @@ def cleanup_loop():
             for f in os.listdir(UPLOAD_FOLDER):
                 p = os.path.join(UPLOAD_FOLDER, f)
                 if f == 'student_data.json': continue
+                # Skip folders (for example uploads/ai_lab_docs) to avoid permission errors.
+                if not os.path.isfile(p):
+                    continue
                 if os.stat(p).st_mtime < now - 600:
                     try: 
                         os.remove(p)
