@@ -1216,12 +1216,17 @@ body.dark-theme .settings-modal {
         }
 
         .logo {
-            padding: 0 25px 30px;
-            font-size: 1.5rem;
+            padding: 0 20px 20px;
+            font-size: 1.3rem;
             font-weight: 800;
             color: var(--primary);
             display: flex;
-            align-items: center; gap: 10px;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
         }
 
         .nav-item {
@@ -1233,7 +1238,7 @@ body.dark-theme .settings-modal {
             transition: 0.3s;
             color: #cbd5e1;
             font-weight: 500;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
 
         .nav-item:hover { background: var(--active-link); color: white; }
@@ -1254,6 +1259,8 @@ body.dark-theme .settings-modal {
             justify-content: flex-start;
             gap: 14px;
             overflow-y: auto;
+            overflow-x: hidden;
+            box-sizing: border-box;
         }
 
         .sidebar-overlay {
@@ -1270,10 +1277,20 @@ body.dark-theme .settings-modal {
                 top: 0;
                 left: 0;
                 bottom: 0;
-                width: min(82vw, 320px);
+                width: clamp(170px, 44vw, 220px);
                 z-index: 1200;
                 transform: translateX(-105%);
                 transition: transform 0.28s ease;
+            }
+
+            .logo {
+                padding: 0 10px 10px;
+                font-size: 0.95rem;
+                gap: 5px;
+            }
+
+            .logo i {
+                font-size: 1rem;
             }
 
             body.mobile-sidebar-open .sidebar {
@@ -1298,14 +1315,96 @@ body.dark-theme .settings-modal {
 
             .main-content {
                 width: 100%;
-                padding: 20px 14px 28px;
+                padding: 12px 10px 20px;
+                box-sizing: border-box;
+            }
+
+            .tool-card {
+                padding: 16px;
+                box-sizing: border-box;
+                width: 100%;
+                margin: 0;
             }
 
             .workspace-topbar.app-shell-topbar {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 8px;
                 position: sticky;
                 top: 0;
                 z-index: 1000;
+                padding: 8px 10px;
             }
+
+            .topbar-left {
+                justify-content: space-between;
+                gap: 8px;
+            }
+
+            .workspace-identity h3 {
+                font-size: 0.85rem;
+            }
+
+            .workspace-identity .workspace-breadcrumb {
+                margin-top: 2px;
+                padding: 7px 8px;
+                font-size: 0.72rem;
+                gap: 6px;
+            }
+
+            #topbar-actions-toggle {
+                display: inline-flex;
+            }
+
+            .topbar-right {
+                display: none;
+                width: 100%;
+                margin-top: 2px;
+                gap: 8px;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+            }
+
+            body.mobile-topbar-open .topbar-right {
+                display: flex;
+            }
+
+            .topbar-right .quick-action-btn,
+            .topbar-right .command-trigger,
+            .topbar-right #notification-btn {
+                height: 36px;
+            }
+
+            .topbar-right .quick-action-btn {
+                padding: 8px 10px;
+                font-size: 0.75rem;
+            }
+
+            .topbar-right .quick-action-btn span {
+                display: inline;
+            }
+
+            .nav-item {
+                font-size: 0.8rem;
+                padding: 10px 12px;
+                gap: 12px;
+            }
+
+            .topbar-right .command-trigger {
+                min-width: 0;
+                width: 100%;
+                margin-left: 0;
+                padding: 8px 10px;
+                font-size: 0.76rem;
+            }
+
+            .topbar-right .command-trigger kbd {
+                display: none;
+            }
+        }
+
+        #topbar-actions-toggle {
+            display: none;
         }
 
         .tool-screen {
@@ -1325,7 +1424,11 @@ body.dark-theme .settings-modal {
             border-radius: 24px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.05);
             text-align: center;
-            min-width: 400px;
+            min-width: 0;
+            box-sizing: border-box;
+            width: 100%;
+            max-width: 100%;
+            font-size: 0.9rem;
         }
 
         .viewer-card {
@@ -1340,13 +1443,13 @@ body.dark-theme .settings-modal {
         }
 
         iframe { width: 100%; height: 100%; border: none; }
-        h2 { font-size: 1.6rem; margin-bottom: 5px; }
+        h2 { font-size: 1.5rem; margin-bottom: 5px; }
 
         .hub-list { text-align: left; margin-top: 20px; max-height: 400px; overflow-y: auto; }
         .hub-item { 
             background: #f1f5f9; padding: 12px; border-radius: 8px; 
             margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
         .hub-item i { cursor: pointer; color: #94a3b8; }
         .hub-item i:hover { color: #ef4444; }
@@ -1363,16 +1466,16 @@ body.dark-theme .settings-modal {
         }
         .preview-icon { font-size: 1.5rem; color: #64748b; }
         .file-info { flex: 1; overflow: hidden; }
-        .file-info b { display: block; font-size: 0.85rem; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .file-info span { font-size: 0.75rem; color: #94a3b8; }
+        .file-info b { display: block; font-size: 0.8rem; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-info span { font-size: 0.7rem; color: #94a3b8; }
         .img-thumb { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; display: none; }
         .remove-file { color: #94a3b8; cursor: pointer; }
 
         .input-group { text-align: left; margin-bottom: 20px; }
         .input-group label { display: block; font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 5px; }
-        .input-group input, .input-group select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+        .input-group input, .input-group select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 0.9rem; }
 
-        button { color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; }
+        button { color: white; border: none; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; font-size: 0.9rem; }
         .btn-hub { background: var(--student-hub); }
         .btn-primary { background: var(--primary); }
         .btn-merge { background: var(--merge); }
@@ -1678,6 +1781,9 @@ body.dark-theme .settings-modal {
                         <span id="current-screen-label">Dashboard</span>
                     </div>
                 </div>
+                <button id="topbar-actions-toggle" class="shell-icon-btn" type="button" title="Toggle top actions">
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                </button>
             </div>
 
             <div class="topbar-right">
@@ -2675,6 +2781,8 @@ async function startFreshConversion() {
         function initializeAppShell() {
             const toggle = document.getElementById('sidebar-toggle');
             const overlay = document.getElementById('sidebar-overlay');
+            const topbarActionsToggle = document.getElementById('topbar-actions-toggle');
+            const appTopbar = document.querySelector('.workspace-topbar.app-shell-topbar');
             const savedState = localStorage.getItem(SIDEBAR_STATE_KEY) === '1';
             if (isMobileSidebarViewport()) {
                 document.body.classList.remove('sidebar-collapsed');
@@ -2684,6 +2792,10 @@ async function startFreshConversion() {
 
             const closeMobileSidebar = () => {
                 document.body.classList.remove('mobile-sidebar-open');
+            };
+
+            const closeMobileTopbar = () => {
+                document.body.classList.remove('mobile-topbar-open');
             };
 
             toggle?.addEventListener('click', () => {
@@ -2696,6 +2808,12 @@ async function startFreshConversion() {
                 setSidebarCollapsed(!isCollapsed);
             });
 
+            topbarActionsToggle?.addEventListener('click', (event) => {
+                if (!isMobileSidebarViewport()) return;
+                event.stopPropagation();
+                document.body.classList.toggle('mobile-topbar-open');
+            });
+
             overlay?.addEventListener('click', closeMobileSidebar);
 
             document.querySelectorAll('.sidebar .nav-item').forEach((item) => {
@@ -2706,9 +2824,25 @@ async function startFreshConversion() {
                 });
             });
 
+            document.querySelectorAll('.topbar-right button').forEach((item) => {
+                item.addEventListener('click', () => {
+                    if (isMobileSidebarViewport()) {
+                        closeMobileTopbar();
+                    }
+                });
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!isMobileSidebarViewport()) return;
+                if (!document.body.classList.contains('mobile-topbar-open')) return;
+                if (!appTopbar || appTopbar.contains(event.target)) return;
+                closeMobileTopbar();
+            });
+
             window.addEventListener('resize', () => {
                 if (!isMobileSidebarViewport()) {
                     closeMobileSidebar();
+                    closeMobileTopbar();
                 }
             });
 
