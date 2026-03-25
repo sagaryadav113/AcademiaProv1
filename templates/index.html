@@ -1256,6 +1256,58 @@ body.dark-theme .settings-modal {
             overflow-y: auto;
         }
 
+        .sidebar-overlay {
+            display: none;
+        }
+
+        @media (max-width: 900px) {
+            body {
+                overflow-x: hidden;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                width: min(82vw, 320px);
+                z-index: 1200;
+                transform: translateX(-105%);
+                transition: transform 0.28s ease;
+            }
+
+            body.mobile-sidebar-open .sidebar {
+                transform: translateX(0);
+            }
+
+            .sidebar-overlay {
+                display: block;
+                position: fixed;
+                inset: 0;
+                z-index: 1100;
+                background: rgba(15, 23, 42, 0.45);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s ease;
+            }
+
+            body.mobile-sidebar-open .sidebar-overlay {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            .main-content {
+                width: 100%;
+                padding: 20px 14px 28px;
+            }
+
+            .workspace-topbar.app-shell-topbar {
+                position: sticky;
+                top: 0;
+                z-index: 1000;
+            }
+        }
+
         .tool-screen {
             display: none; 
             width: 100%;
@@ -1608,6 +1660,7 @@ body.dark-theme .settings-modal {
         <div class="nav-item" data-screen="screen-plagiarism" data-label="Plagiarism Checker" data-group="AI" onclick="showScreen('screen-plagiarism')"><i class="fa-solid fa-copy"></i><span>Plagiarism Checker</span></div>
         <div class="nav-item" data-screen="screen-design-qa" data-label="Design QA" data-group="AI" onclick="showScreen('screen-design-qa')"><i class="fa-solid fa-list-check"></i><span>Design QA</span></div>
     </div>
+    <div id="sidebar-overlay" class="sidebar-overlay" aria-hidden="true"></div>
 
     <div class="main-content">
         <div class="workspace-topbar app-shell-topbar">
@@ -2602,6 +2655,11 @@ async function startFreshConversion() {
     }
 }
         const SIDEBAR_STATE_KEY = 'academiapro.sidebarCollapsed';
+        const MOBILE_SIDEBAR_BREAKPOINT = 900;
+
+        function isMobileSidebarViewport() {
+            return window.matchMedia(`(max-width: ${MOBILE_SIDEBAR_BREAKPOINT}px)`).matches;
+        }
 
         function setSidebarCollapsed(collapsed) {
             document.body.classList.toggle('sidebar-collapsed', collapsed);
@@ -2616,12 +2674,42 @@ async function startFreshConversion() {
 
         function initializeAppShell() {
             const toggle = document.getElementById('sidebar-toggle');
+            const overlay = document.getElementById('sidebar-overlay');
             const savedState = localStorage.getItem(SIDEBAR_STATE_KEY) === '1';
-            setSidebarCollapsed(savedState);
+            if (isMobileSidebarViewport()) {
+                document.body.classList.remove('sidebar-collapsed');
+            } else {
+                setSidebarCollapsed(savedState);
+            }
+
+            const closeMobileSidebar = () => {
+                document.body.classList.remove('mobile-sidebar-open');
+            };
 
             toggle?.addEventListener('click', () => {
+                if (isMobileSidebarViewport()) {
+                    document.body.classList.toggle('mobile-sidebar-open');
+                    return;
+                }
+
                 const isCollapsed = document.body.classList.contains('sidebar-collapsed');
                 setSidebarCollapsed(!isCollapsed);
+            });
+
+            overlay?.addEventListener('click', closeMobileSidebar);
+
+            document.querySelectorAll('.sidebar .nav-item').forEach((item) => {
+                item.addEventListener('click', () => {
+                    if (isMobileSidebarViewport()) {
+                        closeMobileSidebar();
+                    }
+                });
+            });
+
+            window.addEventListener('resize', () => {
+                if (!isMobileSidebarViewport()) {
+                    closeMobileSidebar();
+                }
             });
 
             const notificationBtn = document.getElementById('notification-btn');
