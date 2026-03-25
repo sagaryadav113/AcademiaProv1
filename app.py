@@ -208,6 +208,10 @@ def convert_to_pdf(in_path, out_path):
     cmd = [
         office_bin,
         "--headless",
+        "--nologo",
+        "--nolockcheck",
+        "--nodefault",
+        "--norestore",
         "--convert-to",
         "pdf:writer_pdf_Export",
         "--outdir",
@@ -237,7 +241,7 @@ def handle_conversion():
         return "No files", 400
 
     results = []
-    failed_files = []
+    failed_details = []
     for file in files:
         fname = secure_filename(file.filename)
         in_p = os.path.join(UPLOAD_FOLDER, fname)
@@ -249,12 +253,18 @@ def handle_conversion():
             results.append(out_p)
         except Exception as e:
             logger.warning("Word conversion failed for %s: %s", fname, e)
-            failed_files.append(fname)
+            failed_details.append((fname, str(e)))
 
     if not results:
+        first_error = failed_details[0][1] if failed_details else "unknown error"
+        if "LibreOffice is not installed" in first_error:
+            return (
+                "Word conversion backend is not available on this service instance. "
+                "Deploy the Docker service version to enable LibreOffice conversion.",
+                501,
+            )
         return (
-            "Could not convert the uploaded Word file(s) on this server. "
-            "Please try again later or contact support.",
+            f"Could not convert uploaded Word file(s). First error: {first_error}",
             500,
         )
 
