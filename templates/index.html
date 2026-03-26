@@ -1353,18 +1353,24 @@ body.dark-theme .settings-modal {
 
             .topbar-left {
                 justify-content: space-between;
+                align-items: center;
                 gap: 8px;
+            }
+
+            .workspace-identity {
+                flex: 1;
+                min-width: 0;
+                text-align: center;
             }
 
             .workspace-identity h3 {
                 font-size: 0.85rem;
+                margin: 0;
+                text-align: center;
             }
 
             .workspace-identity .workspace-breadcrumb {
-                margin-top: 2px;
-                padding: 7px 8px;
-                font-size: 0.72rem;
-                gap: 6px;
+                display: none;
             }
 
             #topbar-actions-toggle {
@@ -1679,7 +1685,7 @@ body.dark-theme .settings-modal {
 
     <div id="intro-page" style="position: fixed; inset: 0; background: var(--primary); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; transition: opacity 0.8s ease;">
     <div style="text-align: center; animation: fadeIn 1.5s ease;">
-        <i class="fa-solid fa-graduation-cap" style="font-size: 6rem; margin-bottom: 20px;"></i>
+        <i class="fa-solid fa-graduation-cap" style="font-size: 4.2rem; margin-bottom: 20px;"></i>
         <h1 style="font-size: 2.5rem; font-weight: 800; margin-bottom: 10px;">AcademiaPro</h1>
         <p style="font-size: 1.2rem; opacity: 0.9;">Your all-in-one smart academic workspace.</p>
         
